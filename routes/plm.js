@@ -1240,6 +1240,7 @@ router.get('/add-grid-row', function(req, res, next) {
         url  = req.app.locals.tenantLink + url;
         url += '/views/13/rows';
 
+    console.log("LW url " + url); 
     let rowData = [];
 
     for(let field of req.query.data) {
@@ -1248,7 +1249,7 @@ router.get('/add-grid-row', function(req, res, next) {
             'value' : field.value
         });
     }
-
+console.log("LW row " + rowData); 
     axios.post(url, {
         'rowData' : rowData
     }, {
