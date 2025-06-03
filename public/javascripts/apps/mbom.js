@@ -28,6 +28,7 @@ let paramsSummary = {
 
 let eBOM         = {};
 let mBOM         = {};
+let urlParameters   = getURLParameters();
 let instructions = [];
 
 let basePartNumber      = '';
@@ -43,12 +44,12 @@ let sectionIdMBOM;
 
 
 $(document).ready(function() {
-    
+
     for(let option of options) {
         let param = option.split(':');
         if(param[0].toLowerCase() === 'site') {
             siteSuffix = '_' + param[1];
-            siteLabel = param[1];
+            siteLabel   = param[1];
         }
     }
 
@@ -71,8 +72,11 @@ $(document).ready(function() {
 
             $.get('/plm/details', { link : links.start }, function(response) {
                 
-                links.ebom    = getSectionFieldValue(response.data.sections, config.mbom.fieldIdEBOM, '', 'link');
-                links.mbom    = getSectionFieldValue(response.data.sections, config.mbom.fieldIdMBOM + siteSuffix, '', 'link');
+                let contextFieldIdEBOM = urlParameters.contextfieldidebom || config.mbom.fieldIdEBOM;
+                let contextFieldIdMBOM = urlParameters.contextfieldidmbom || config.mbom.fieldIdMBOM;
+
+                links.ebom    = getSectionFieldValue(response.data.sections, contextFieldIdEBOM, '', 'link');
+                links.mbom    = getSectionFieldValue(response.data.sections, contextFieldIdMBOM + siteSuffix, '', 'link');
                 
                 if(isBlank(links.mbom)) links.context = links.start;
                 
@@ -1565,7 +1569,7 @@ function copyBOM(wsIdParent, dmsIdParent, linkEBOMRoot, bom) {
                     params.dmsIdChild = childMBOMLink.split('/')[6];
                 }
 
-                requests.push($.get('/plm/bom-add', params));
+                requests.push($.post('/plm/bom-add', params));
 
             }
 
@@ -2590,22 +2594,23 @@ function setWorkspaceView(suffix) {
         let elemParent = $('#workspace-view-list-' + suffix);
             elemParent.html('');
 
-        $.get('/plm//tableau-data', { 'link' : $('#view-selector-' + suffix).val() }, function(response) {      
+
+        $.get('/plm/tableau-data', { 'link' : $('#view-selector-' + suffix).val() }, function(response) {      
             
             $('#add-processing').hide();
             
             let indexDescriptorField = 0;
 
-            if(response.data.length > 0) {
-                for(let indexField = 0; indexField < response.data[0].fields.length; indexField++) {
-                    if(response.data[0].fields[indexField].id === 'DESCRIPTOR') {
+            if(response.data.items.length > 0) {
+                for(let indexField = 0; indexField < response.data.items[0].fields.length; indexField++) {
+                    if(response.data.items[0].fields[indexField].id === 'DESCRIPTOR') {
                         indexDescriptorField = indexField;
                         break;
                     }
                 }
             }
 
-            for(let item of response.data) {
+            for(let item of response.data.items) {
                 addItemListEntry(item.item.link, item.item.urn, item.fields[indexDescriptorField].value, suffix, elemParent, false);
             }
 
@@ -2832,30 +2837,19 @@ function onViewerSelectionChanged(event) {
 
     if(disableViewerSelectionEvent) return;
 
-    if (event.dbIdArray.length === 1) {
+    if(event.dbIdArray.length === 1) {
+
+        viewerGetSelectedPartNumber(event, function(partNumber) {
 
         let updateBOMPanels = true;
-
-        viewer.getProperties(event.dbIdArray[0], function(data) {
-
-            let partNumber = data.name.split(':')[0];
-            let propertyMatch = false;
-
-            for(let partNumberProperty of config.viewer.numberProperties) {
-                for(let property of data.properties) {
-                    if(property.displayName === partNumberProperty) {
-                        partNumber = property.displayValue;
-                        if(partNumber.indexOf(':') > -1) { partNumber = partNumber.split(':')[0]; }
-                        propertyMatch = true;
-                        break;
-                    }
-                }
-                if(propertyMatch) break;
-            }
 
             if(disassembleMode) {
 
                 if((event.mouseButton === 0) || isBlank(event.mouseButton)) {
+
+                    disableViewerSelectionEvent = true;
+                    viewerHideModel(partNumber);
+                    disableViewerSelectionEvent = false;
                     $('#ebom').find('.item.leaf').each(function() {
                         let elemEBOM = $(this);
                         if(elemEBOM.attr('data-part-number') === partNumber) {
@@ -2864,8 +2858,9 @@ function onViewerSelectionChanged(event) {
                             
                         }
                     });
-                    viewerHideModel(partNumber);
+
                 }
+
             } else {
 
                 $('.item.leaf').hide();
@@ -2884,7 +2879,7 @@ function onViewerSelectionChanged(event) {
 
             }
 
-        });
+         });
 
     } else {
 
@@ -3351,7 +3346,7 @@ function addBOMItems() {
                 if(isEBOMItem) params.fields.push({ 'link' : linkFieldEBOMItem, 'value' : true });
                 if(!isBlank(linkEBOMRoot)) params.fields.push({ 'link' : linkFieldEBOMRootItem, 'value' : linkEBOMRoot });
 
-                requests.push($.get('/plm/bom-add', params));
+                requests.push($.post('/plm/bom-add', params));
                 elements.push(elemItem);
 
             }
@@ -3455,7 +3450,7 @@ function updateBOMItems() {
                     'dmsIdChild'  : paramsChild[6],
                     'edgeId'      : elemItem.attr('data-edge'),
                     'number'      : edNumber,
-                    'qty'         : edQty,
+                    'quantity'    : edQty,
                     'pinned'      : config.mbom.pinMBOMItems
                 };
 
@@ -3481,7 +3476,7 @@ function updateBOMItems() {
                     }
                 }
 
-                requests.push($.get('/plm/bom-update', params));
+                requests.push($.post('/plm/bom-update', params));
                 elements.push(elemItem);
 
             }

@@ -6,9 +6,6 @@ let records          = null;
 
 
 // let actions = [
-//     // { id : 'add-owner'    , class : 'permisson-edit'   , title : 'Add Owner', subtitle : "Update selected field values" },
-//     // { id : 'remove-owner' , class : 'permisson-edit'   , title : 'Remove Owner', subtitle : "Update selected field values" },
-//     // { id : 'clear-owners' , class : 'permisson-edit'   , title : 'Clear All Additional Owners', subtitle : "Update selected field values" },
 //     // { id : 'replace-owner', class : 'permisson-edit'   , title : 'Replace Owner', subtitle : "Update selected field values" },
 //     { id : 'bom-pin'      , class : 'permisson-edit'   , title : 'Change BOM Pin', subtitle : "Enables or disables the pin of all BOM children" },
 // ]
@@ -17,15 +14,25 @@ let records          = null;
 $(document).ready(function() {
 
     setUIEvents();
-    
-    let requests = [
-        $.get('/plm/workspaces', {}),
-        $.get('/plm/users',      {})
-    ]
+    insertMenu();
 
-    getFeatureSettings('items', requests, function(responses) {
-        setWorkspaces(responses[0]);
-        setUserSelectors(responses[1]);
+    validateSystemAdminAccess(function(isAdmin) {
+
+        if(isAdmin) {
+
+            let requests = [
+                $.get('/plm/workspaces', {}),
+                $.get('/plm/users',      {}),
+                $.get('/plm/groups',     {})
+            ]
+        
+            getFeatureSettings('items', requests, function(responses) {
+                setWorkspaces(responses[0]);
+                setUserSelectors(responses[1]);
+                setGroupSelectors(responses[2]);
+            });
+
+        }
     });
 
 });
@@ -161,16 +168,43 @@ function setUserSelectors(response) {
     });
 
 }
+function setGroupSelectors(response) {
+
+    sortArray(response.data.items, 'shortName');
+
+    $('.select-group').each(function() {
+
+        let isAction = $(this).closest('.action').length > 0;
+        let label    = (isAction) ? 'Select Group' : 'Any';
+
+        if(typeof $(this).attr('data-empty-label') !== 'undefined') label = $(this).attr('data-empty-label');
+
+        $('<option></option>').appendTo($(this))
+            .html(label)
+            .attr('value', '--');
+
+        for(let group of response.data.items) {
+
+            $('<option></option>').appendTo($(this))
+                .attr('value', group.__self__)
+                .html(group.shortName);
+            
+        }
+
+    });
+
+}
 
 
 // When selecting workspace, enable matching filters
 function updatefilters() {
 
     wsConfig.link = $('#workspace').val();
-    stopped = false;
+    wsConfig.name = $('#workspace').children('option:selected').html();
+    stopped       = false;
 
     addLogSeparator();
-    addLogEntry('Selected workspace ' + $('#workspace').children('option:selected').html(), 'head');
+    addLogEntry('Selected workspace ' + wsConfig.name, 'head');
     
     let requests = [
         $.get('/plm/workspace'  , { link : wsConfig.link }),
@@ -181,6 +215,7 @@ function updatefilters() {
         $.get('/plm/workspace-workflow-states', { link : wsConfig.link }),
         $.get('/plm/tableaus'     , { link : wsConfig.link }),
         $.get('/plm/workspace-workflow-transitions', { link : wsConfig.link }),
+        $.get('/plm/workspace-lifecycle-transitions', { link : wsConfig.link })
     ];
 
     $('#overlay').show();
@@ -192,16 +227,17 @@ function updatefilters() {
     $('.permission-summary').addClass('hidden');
     $('.permission-attachments').addClass('hidden');
     $('.permission-bom-view').addClass('hidden');
+    $('.permission-lifecycle').addClass('hidden');
     $('.select-status').children().remove();
     $('.select-script').children().remove();
     $('.select-field').children().remove();
     $('#filter-properties').addClass('hidden');
     $('.property-filter').remove();
     $('#save-text-value').addClass('hidden');
+    $('#export-attachments-link').html('All Files will be stored in folder ' + wsConfig.name + ' Files. This folder will be created on the server once the first file gets downloaded.<p><a class="button" target="_blank" href="/storage/exports/' + wsConfig.name + ' Files">Open Folder</a></p>');
 
-    $('.select-user').each(function() {
-        $(this).val('--');
-    });
+    $('.select-user' ).each(function() { $(this).val('--'); });
+    $('.select-group').each(function() { $(this).val('--'); });
 
     Promise.all(requests).then(function(responses) {
 
@@ -213,15 +249,17 @@ function updatefilters() {
         wsConfig.states      = responses[5].data.states;
         wsConfig.views       = responses[6].data;
         wsConfig.transitions = responses[7].data;
+        wsConfig.lifecycles  = responses[8].data;
 
         for(let field of responses[3].data) {
             if(field.name !== null) wsConfig.fields.push(field);
         }
 
-        sortArray(wsConfig.fields     , 'name');
-        sortArray(wsConfig.states     , 'name');
+        sortArray(wsConfig.fields     , 'name' );
+        sortArray(wsConfig.states     , 'name' );
         sortArray(wsConfig.views      , 'title');
-        sortArray(wsConfig.transitions, 'name');
+        sortArray(wsConfig.transitions, 'name' );
+        sortArray(wsConfig.lifecycles , 'name' );
     
         $('#overlay').hide();
         $('#filter-properties').removeClass('hidden');
@@ -230,6 +268,7 @@ function updatefilters() {
 
             case '2': // Workflow
             case '7': // Revisioning
+            case '8': // Suppliers
                 $('.ws-type-2').removeClass('hidden');
                 break;
 
@@ -256,6 +295,7 @@ function updatefilters() {
         setWorkspaceViewSelector();
         setWorkflowStateSelectors();
         setWorkflowTransitionSelectors();
+        setLifecycleTransitionSelectors();
         setPropertySelectors();
         setScriptSelectors();
         getMatches();
@@ -312,7 +352,7 @@ function setWorkflowTransitionSelectors() {
 
         $('<option></option>').appendTo(elemSelect)
             .attr('value', '--')
-            .html('Select Transition');
+            .html('Select Workflow Transition');
 
         for(let transition of wsConfig.transitions) {
 
@@ -321,6 +361,30 @@ function setWorkflowTransitionSelectors() {
                 .attr('value', transition.__self__)
                 .html(transition.name + ' (' + transition.customLabel + ') to state ' + transition.toState.title);
 
+        }
+
+    });
+
+}
+function setLifecycleTransitionSelectors() {
+
+    $('.select-lifecycle').each(function() {
+
+        let elemSelect = $(this);
+            elemSelect.children().remove();
+
+        $('<option></option>').appendTo(elemSelect)
+            .attr('value', '--')
+            .html('Select Lifeycle Transition');
+
+        if(wsConfig.type == "6") {
+            for(let lifecycle of wsConfig.lifecycles) {
+
+                $('<option></option>').appendTo(elemSelect)
+                    .attr('value', lifecycle.__self__)
+                    .html(lifecycle.name + ' ( ' + lifecycle.fromState.title + ' >> ' + lifecycle.toState.title + ' )');
+
+            }
         }
 
     });
@@ -548,7 +612,7 @@ function getMatches() {
         params.fields   = [ 'DESCRIPTOR' ];
         params.sort     = [ 'DESCRIPTOR' ];
 
-        $.get('/plm/search', params, function(response) {
+        $.post('/plm/search', params, function(response) {
             if(timestamp !== params.timestamp) return;
             addLogEntry('There are ' + (response.data.totalResultCount || 0)+ ' matching records in workspace ' + response.params.workspace);
         });
@@ -834,10 +898,24 @@ function validateInputs() {
     if(elemAction.length === 0) { 
         proceed = false;  addLogEntry('Cannot start, no action is selected', 'error') 
     } else {
-        if(elemAction.attr('id') !== 'delete-attachments') {
+        if(elemAction.attr('id') === 'add-owner') {
+            if($('#select-add-owner-user').val() === '--') {
+                if($('#select-add-owner-group').val() === '--') {
+                    addLogEntry('Cannot start: Action options are not set', 'error');
+                    proceed = false;
+                }
+            }
+        } else if(elemAction.attr('id') === 'remove-owner') {
+            if($('#select-remove-owner-user').val() === '--') {
+                if($('#select-remove-owner-group').val() === '--') {
+                    addLogEntry('Cannot start: Action options are not set', 'error');
+                    proceed = false;
+                }
+            }
+        } else if(elemAction.attr('id') !== 'delete-attachments') {
             elemAction.find('select').each(function() {
                 if($(this).val() === '--') {
-                    addLogEntry('Cannot start: Action options are not set', 'error') ;
+                    addLogEntry('Cannot start: Action options are not set', 'error');
                     proceed = false;
                 }
             });
@@ -880,6 +958,7 @@ function startProcessing() {
     run.success      = 0;
     run.errors       = [];
     run.ids          = [];
+    run.storage      = '';
 
     run.params = {
         pageNo    : 0,
@@ -900,6 +979,7 @@ function startProcessing() {
     if(view === '--') {
 
         run.url           = '/plm/search';
+        run.method        = 'post';
         run.params.link   = $('#workspace').val();
         run.params.filter = getSearchFilters();
         run.params.fields = [ 'DESCRIPTOR' ];
@@ -910,8 +990,15 @@ function startProcessing() {
     } else {
 
         run.url         = '/plm/tableau-data';
+        run.method      = 'get';
         run.params.link = view;
         
+    }
+
+    if(run.actionId === 'export-attachments') {
+        run.storage = '/storage/exports/' + $('#workspace').children('option:selected').html() + ' Files';
+        addLogEntry('Files will be stored at  <a target="_blank" href="' + run.storage + '">' + $('#workspace').children('option:selected').html() + '</a>');
+        addLogSpacer();
     }
 
     getNextRecords();
@@ -927,26 +1014,31 @@ function getNextRecords() {
 
     if(stopped) return;
 
-    $.get(run.url, run.params, function(response) {
+    $.ajax({
+        url     : run.url,
+        type    : run.method,
+        data    : run.params, 
+        success : function(response) {
 
-        if(run.total < 0) {
-            run.total = response.data.totalResultCount || response.data.total;
-            $('#progress').removeClass('hidden');
+            if(run.total < 0) {
+                run.total = response.data.totalResultCount || response.data.total;
+                $('#progress').removeClass('hidden');
+            }
+
+            if(isBlank(run.total)) run.total = 0;
+
+            updateProgress(0);
+            setRecordsData(response);
+
+            if(records.length === 0) {
+                endProcessing();
+            } else {
+                if(records.length === 1) addLogEntry('Found next record to process');
+                else addLogEntry('Found next ' + records.length + ' records to process');
+                processNextRecords();
+            }
+            
         }
-
-        if(isBlank(run.total)) run.total = 0;
-
-        updateProgress(0);
-        setRecordsData(response);
-
-        if(records.length === 0) {
-            endProcessing();
-        } else {
-            if(records.length === 1) addLogEntry('Found next record to process');
-            else addLogEntry('Found next ' + records.length + ' records to process');
-            processNextRecords();
-        }
-
     });
 
 }
@@ -1076,13 +1168,13 @@ function genRequests(limit) {
         let link    = genItemURL({ link : params.link });
         let message = (options.testRun) ? 'Would process' : 'Processing';
 
-        addLogEntry(message + ' <a target="_blank" href="' + link + '">' + params.descriptor + '</a>', 'count', run.counter++);
+        addLogEntry(message + ' <a target="_blank" href="' + link + '">' + params.descriptor + '</a>', 'notice');
 
         if((options.testRun) || stopped) {
 
         } else {
 
-            if(run.actionId === 'store-dmsid') {
+                   if(run.actionId === 'store-dmsid') {
 
                 let fieldId = $('#select-store-dmsid').val();
                 let value   = getRecordFieldValue(record, fieldId, '');
@@ -1120,8 +1212,42 @@ function genRequests(limit) {
             } else if(run.actionId === 'set-owner') {
 
                 params.owner = $('#select-set-owner').children('option:selected').attr('data-id');
+                params.notify = ($('#select-notify-new-owner').val() === 'y');
 
                 requests.push($.post('/plm/set-owner', params));
+
+            } else if(run.actionId === 'add-owner') {
+
+                let user  = $('#select-add-owner-user' ).children('option:selected').attr('data-id');
+                let group = $('#select-add-owner-group').val();
+                
+                if(user  !== '--') params.user  = user;
+                if(group !== '--') params.group = group;
+
+                requests.push($.post('/plm/add-owner', params));
+            
+            } else if(run.actionId === 'remove-owner') {
+
+                let user  = $('#select-remove-owner-user' ).children('option:selected').attr('data-id');
+                let group = $('#select-remove-owner-group').val();
+                
+                if(user  !== '--') params.user  = user;
+                if(group !== '--') params.group = group;
+
+                requests.push($.post('/plm/remove-owner', params));
+
+            } else if(run.actionId === 'clear-owners') {
+
+                requests.push($.post('/plm/clear-owners', params));
+
+            } else if(run.actionId === 'export-attachments') {
+
+                params.folder       = $('#workspace').children('option:selected').html() + ' Files';
+                params.includeDMSID = $('#select-export-attachments-dmsid').val().toLowerCase();
+                params.filenamesIn  = $('#input-export-attachments-in').val().toLowerCase();
+                params.filenamesEx  = $('#input-export-attachments-ex').val().toLowerCase();
+
+                requests.push($.post('/plm/export-attachments', params));
 
             } else if(run.actionId === 'delete-attachments') {
 
@@ -1131,8 +1257,17 @@ function genRequests(limit) {
 
                 params.transition = $('#select-perform-transition').val();
                 let elemComment = $('#input-perform-transition');
-                if(!elemComment.hasClass('hidden'))params.comment = elemComment.val();
+                if(!elemComment.hasClass('hidden')) params.comment = elemComment.val();
                 requests.push($.get('/plm/transition', params));
+            } else if(run.actionId === 'perform-lifecycle-transition') {
+
+                params.transition = $('#select-perform-lifecycle-transition').val();
+                let elemRevision = $('#input-perform-lifecycle-transition');
+                if(!elemRevision.hasClass('hidden')) params.revision = elemRevision.val();
+
+                console.log(params);
+
+                requests.push($.get('/plm/lifecycle-transition', params));
 
             } else if(run.actionId === 'run-script') {
 
@@ -1494,11 +1629,18 @@ function endProcessing() {
 
         }
 
+        if(run.actionId === 'export-attachments') {
+            addLogSpacer();
+            addLogEntry('Files are available at  <a target="_blank" href="' + run.storage + '">' + $('#workspace').children('option:selected').html() + '</a>');
+        }
+
     }
 
     addLogEnd();
     addLogSeparator();
     addLogSpacer();
+
+
 
     let divElement = document.getElementById('console-content');
         divElement.scrollTop = divElement.scrollHeight

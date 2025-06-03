@@ -36,7 +36,8 @@ let settings = {
     workspaceViews    : {},
     workspaceItems    : {},
     workflowHistory   : {},
-    pdmFileProperties : {}
+    pdmFileProperties : {},
+    users             : {}
 }
 
 const includesAny = (arr, values) => values.some(v => arr.includes(v));
@@ -60,7 +61,32 @@ $(document).ready(function() {
 });
 
 
-// Validate System Admin privileges
+// Validate System Admin permission
+function validateSystemAdminAccess(callback) {
+
+    showStartupDialog();
+
+    $.get('/plm/groups-assigned', {}, function (response) {
+
+        let isSystemAdmin = false;
+
+        for(let group of response.data) {
+            if(group.shortName === 'Administration [SYSTEM]') isSystemAdmin = true;
+        }
+
+        if(!isSystemAdmin) {
+            showErrorMessage('Not Permitted', 'This feature requires system admin privileges');
+        } else {
+            hideStartupDialog();
+        }
+        callback(isSystemAdmin);
+
+    });
+
+}
+
+
+// Login as System Admin if permitted
 function getSystemAdminSession(callback) {
 
     showStartupDialog();
@@ -200,6 +226,154 @@ function showStartupDialog() {
 
     $('<div></div>').appendTo($('#startup'))
         .attr('id', 'startup-logo');
+
+}
+function hideStartupDialog() {
+
+    $('#startup').remove();
+    $('#startup-logo').remove();
+    $('body').children().removeClass('hidden');
+
+}
+
+
+// Insert Main Menu to switch utilities
+function insertMenu() {
+
+    if(menu.length === 0) return;
+
+    let curUrl   = document.location.href;
+    let showMenu = false;
+    let endpoint = curUrl.split('/').pop();
+    
+    for(let column of menu) {
+        for(let category of column) {
+            for(let command of category.commands) {
+                if(command.url.indexOf('/' + endpoint) === 0) {
+                    showMenu = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if(!showMenu) return;
+
+    $(document).click(function() { $('#menu').fadeOut(150); })
+
+    $('<div></div>').insertBefore($('#header-logo'))
+        .attr('id', 'menu-button')
+        .addClass('icon')
+        .addClass('icon-menu')
+        .addClass('button')
+        .click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $('#menu').fadeIn(150);
+        });
+
+    let elemMenu = $('<div></div>').appendTo($('body'))
+        .attr('id', 'menu')
+        .click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();     
+        })
+
+    $('<div></div>').appendTo(elemMenu)
+        .attr('id', 'menu-icon')
+        .addClass('icon')
+        .addClass('icon-menu')
+        .click(function() {
+            $('#menu').fadeOut(150);
+        });
+
+    let elemColumns = $('<div></div>').appendTo(elemMenu).attr('id', 'menu-columns');
+
+    for(let column of menu) {
+
+        let elemColumn = $('<div></div>').appendTo(elemColumns)
+        let first      = true;
+
+        for(let category of column) {
+
+            let elemTitle = $('<div></div>').appendTo(elemColumn)
+                .addClass('menu-title')
+                .html(category.label);
+
+            if(!first) elemTitle.css('margin-top', '78px');
+
+            let elemCommands = $('<div></div>').appendTo(elemColumn)
+                .addClass('menu-commands');
+
+            for(let command of category.commands) {
+
+                let elemCommand = $('<div></div>').appendTo(elemCommands)
+                    .addClass('menu-command')
+                    .attr('data-url', command.url)
+                    .click(function(e) {
+                        clickMenuCommand($(this));
+                    });
+
+                $('<div></div>').appendTo(elemCommand)
+                    .addClass('menu-command-icon')
+                    .addClass('icon')
+                    .addClass(command.icon);
+
+                let elemCommandName = $('<div></div>').appendTo(elemCommand)
+                    .addClass('menu-command-name');
+
+                $('<div></div>').appendTo(elemCommandName)
+                    .addClass('menu-command-title')
+                    .html(command.title);
+
+                $('<div></div>').appendTo(elemCommandName)
+                    .addClass('menu-command-subtitle')
+                    .html(command.subtitle);
+
+            }
+
+            first = false;
+
+        }
+    }
+
+}
+function clickMenuCommand(elemCommand) {
+
+    let url        = elemCommand.attr('data-url');
+    let location   = document.location.href.split('?');
+    let newParams  = (url.indexOf('?') > -1) ? url.split('?')[1].split('&') : [];
+    let keepParams = ['theme']
+
+    if(location.length > 1) {
+        
+        let curParams = location[1].split('&');
+
+        for(let curParam of curParams) {
+
+            let curName = curParam.split('=')[0];
+            let add = keepParams.includes(curName);
+
+            for(let newParam of newParams) {
+
+                let newName = newParam.split('=')[0];
+
+                if(newName.toLowerCase() === curName.toLowerCase()) {
+                    add = false;
+                    break;
+                }
+
+            }
+
+            if(add) {
+                url += (url.indexOf('?') > 0) ? '&' : '?';
+                url += curParam;
+            }
+
+        }
+    }
+
+    document.location.href = url;
 
 }
 
@@ -426,6 +600,8 @@ function appendNoDataFound(id, icon, text) {
         .addClass('no-data-text')
         .html(text);
 
+    return elemNoData;
+
 }
 
 
@@ -513,7 +689,7 @@ function getSurfaceLevel(elem, includeParents) {
 
     }
 
-    return 'surface-level-0';
+    return 'surface-level-1';
 
 }
 
@@ -691,14 +867,14 @@ function insertCalendarMonth(id, currentDate) {
     elemMonthName.addClass('calendar-month-name');
     elemMonthName.html(currentDate.toLocaleString('default', { month: 'long' }));
 
-    elemRowDays.append('<th></th>');
-    elemRowDays.append('<th>Mo</th>');
-    elemRowDays.append('<th>Tu</th>');
-    elemRowDays.append('<th>We</th>');
-    elemRowDays.append('<th>Th</th>');
-    elemRowDays.append('<th>Fr</th>');
-    elemRowDays.append('<th>Sa</th>');
-    elemRowDays.append('<th>Su</th>');
+    elemRowDays.append('<th class="calendar-day-name"></th>');
+    elemRowDays.append('<th class="calendar-day-name">Mo</th>');
+    elemRowDays.append('<th class="calendar-day-name">Tu</th>');
+    elemRowDays.append('<th class="calendar-day-name">We</th>');
+    elemRowDays.append('<th class="calendar-day-name">Th</th>');
+    elemRowDays.append('<th class="calendar-day-name">Fr</th>');
+    elemRowDays.append('<th class="calendar-day-name">Sa</th>');
+    elemRowDays.append('<th class="calendar-day-name">Su</th>');
   
     elemTable.addClass('calendar');
 
@@ -709,19 +885,20 @@ function insertCalendarMonth(id, currentDate) {
     let currentDay      = firstDay;
     let startDay        = firstDay.getDay() - 1;
     let onejan          = new Date(currentYear, 0, 1);
+    let today           = new Date();
     
     while (currentDay <= lastDay) {
 
         let week = Math.ceil((((currentDay.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
     
-        let weekRow = $('<tr></tr>');
-            weekRow.appendTo(elemBody);
+        let weekRow = $('<tr></tr>').appendTo(elemBody)
+            .addClass('calendar-week')
+            .attr('data-week', week);
         
-        let weekCell = $('<td></td>');
-            weekCell.addClass('calendar-week');
-            weekCell.attr('data-date', currentDay);
-            weekCell.html(week);
-            weekCell.appendTo(weekRow);
+        $('<td></td>').appendTo(weekRow)
+            .addClass('calendar-week-number')
+            .attr('data-date', currentDay)
+            .html(week)
 
         for (let i = 0; i < 7; i++) {
 
@@ -729,23 +906,39 @@ function insertCalendarMonth(id, currentDate) {
             let iDay    = currentDay.getDay();
             
             if(i >= startDay) {
-
                 dayCell.attr('data-date', currentDay);
+                dayCell.addClass('calender-week-day-' + i);
                 if (currentDay >= firstDay && currentDay <= lastDay) {
+                    dayCell.addClass('calendar-day');
                     if((iDay === 0) || (iDay === 6)) dayCell.addClass('calendar-weekend');
+
+                    switch(iDay) {
+                        case 0 : dayCell.attr('title', 'Sunday'   ); break;
+                        case 1 : dayCell.attr('title', 'Monday'   ); break;
+                        case 2 : dayCell.attr('title', 'Tuesday'  ); break;
+                        case 3 : dayCell.attr('title', 'Wednesday'); break;
+                        case 4 : dayCell.attr('title', 'Thursday' ); break;
+                        case 5 : dayCell.attr('title', 'Friday'   ); break;
+                        case 6 : dayCell.attr('title', 'Saturday' ); break;
+                    }
+
+                    dayCell.attr('data-date', iDay);
                     dayCell.html(currentDay.getDate());
                     if (currentDay.toDateString() === new Date().toDateString()) {
                         dayCell.addClass('calendar-day-current');
                         weekRow.addClass('calendar-week-current');
+                    } else if(today.getTime() < currentDay.getTime()) {
+                        dayCell.addClass('calendar-future');
+                    } else {
+                        dayCell.addClass('calendar-past');
                     }
-                }
+                } else dayCell.addClass('calendar-day-next-month');
                 startDay = -1;
                 currentDay.setDate(currentDay.getDate() + 1);
-            }   
+            } else dayCell.addClass('calendar-day-prev-month'); 
 
             dayCell.appendTo(weekRow);
-            dayCell.addClass('calendar-day');
-
+           
         }
     
     }
@@ -771,12 +964,13 @@ function getPanelSettings(link, params, defaults, additional) {
     if(isBlank(defaults.multiSelect)      ) defaults.multiSelect       = false;
     if(isBlank(defaults.filterBySelection)) defaults.filterBySelection = false;
     if(isBlank(defaults.layout)           ) defaults.layout            = 'list';
+    if(isBlank(defaults.number)           ) defaults.number            = true;
     if(isBlank(defaults.collapsePanel)    ) defaults.collapsePanel     = false;
     if(isBlank(defaults.collapseContents) ) defaults.collapseContents  = false;
     if(isBlank(defaults.groupBy)          ) defaults.groupBy           = '';
     if(isBlank(defaults.groupLayout)      ) defaults.groupLayout       = 'column';
     if(isBlank(defaults.additionalData)   ) defaults.additionalData    = [];
-    if(isBlank(defaults.contentSize)      ) defaults.contentSize       = 'xs';
+    if(isBlank(defaults.contentSize)      ) defaults.contentSize       = 'm';
     if(isBlank(defaults.contentSizes)     ) defaults.contentSizes      = [];
     if(isBlank(defaults.tileIcon)         ) defaults.tileIcon          = 'icon-product';
     if(isBlank(defaults.tileImage)        ) defaults.tileImage         = true;
@@ -822,7 +1016,7 @@ function getPanelSettings(link, params, defaults, additional) {
         groupBy           : isBlank(params.groupBy)           ? defaults.groupBy : params.groupBy,
         groupLayout       : isBlank(params.groupLayout)       ? defaults.groupLayout : params.groupLayout,
         additionalData    : isBlank(params.additionalData)    ? defaults.additionalData : params.additionalData,
-        number            : isBlank(params.number)            ? true : params.number,
+        number            : isBlank(params.number)            ? defaults.number : params.number,
         contentSize       : isBlank(params.contentSize)       ? defaults.contentSize  : params.contentSize,
         contentSizes      : isBlank(params.contentSizes)      ? defaults.contentSizes  : params.contentSizes,
         tileIcon          : isBlank(params.tileIcon)          ? defaults.tileIcon  : params.tileIcon,
@@ -903,6 +1097,8 @@ function genPanelTop(id, settings, className) {
     if(settings.multiSelect   ) { elemTop.addClass('multi-select'); }
     if(settings.hidePanel     ) { elemTop.addClass('hidden'); }
     if(settings.hideHeader    ) { elemTop.addClass('no-header'); }
+
+    if(!isBlank(settings.link)) elemTop.attr('data-link', settings.link);
 
     return elemTop;
 
@@ -1097,6 +1293,23 @@ function genPanelCloneButton(id, settings) {
         });
 
     return elemButtonClone;
+
+}
+function genPanelWorkflowActions(id, settings) {
+
+
+    if(isBlank(settings.workflowActions)) return;
+    if(!settings.workflowActions) return;
+
+    let elemToolbar = genPanelToolbar(id, settings, 'controls');
+
+    let elemWorkflowActions = $('<select></select>').prependTo(elemToolbar)
+        .attr('id', id + '-workflow-actions')
+        .addClass('item-workflow-actions')
+        .addClass('button')
+        .hide();
+    
+    return elemWorkflowActions;
 
 }
 function genPanelOpenInPLMButton(id, settings) {
@@ -1492,9 +1705,9 @@ function genPanelRemoveSelectedButton(id, settings, callback) {
 function genPanelContents(id, settings) {
 
     appendProcessing(id, false);
-    appendNoDataFound(id, 'icon-no-data', settings.textNoData);
 
-    $('#' + id + '-no-data').hide();
+    elemNoData = appendNoDataFound(id, 'icon-no-data', settings.textNoData);
+    elemNoData.addClass(settings.layout).hide();
 
     let elemTop = $('#' + id);
 
@@ -1510,6 +1723,7 @@ function genPanelContents(id, settings) {
     else if(settings.layout === 'list'   ) elemContent.addClass('tiles').addClass('list');
     else if(settings.layout === 'row'    ) {
         elemContent.addClass('tiles').addClass('row');
+        if(!isBlank(settings.contentSize)) elemNoData.addClass(settings.contentSize);
         switch(settings.contentSize) {
             case 'xxs':
             case 'xs':
@@ -1850,7 +2064,9 @@ function setPanelContentActions(id, settings, responses) {
     });
 
 }
-function finishPanelContentUpdate(id, settings, items, linkNew) {
+function finishPanelContentUpdate(id, settings, items, linkNew, data) {
+
+    if(isBlank(data)) data = {};
 
     // Set dynamic panel header
     if(!isBlank(settings.headerLabel)) {
@@ -1883,7 +2099,7 @@ function finishPanelContentUpdate(id, settings, items, linkNew) {
     highlightNewPanelContent(id, linkNew);
 
     if(settings.counters) updatePanelCalculations(id);
-    if(!isBlank(settings.afterCompletion)) settings.afterCompletion(id);
+    if(!isBlank(settings.afterCompletion)) settings.afterCompletion(id, data);
 
 }
 function highlightNewPanelContent(id, linkNew) {
@@ -2602,10 +2818,9 @@ function genSingleTile(params, settings) {
             let label = params.status;
 
             for(let stateColor of settings.stateColors) {
-                console.log(settings);
                 if(!isBlank(stateColor.state)) {
                     if(!isBlank(params.status)) {
-                        if(stateColor.name.toLowerCase() === params.status.toLowerCase()) {
+                        if(stateColor.state.toLowerCase() === params.status.toLowerCase()) {
                             color = stateColor.color;
                             if(!isBlank(stateColor.label)) label = stateColor.label;
                         }
@@ -2648,7 +2863,10 @@ function genSingleTile(params, settings) {
 
     if(isBlank(params.imageId) && isBlank(params.imageLink)) elemTile.addClass('no-image');
     
-    if(params.number) {
+    if(params.imageLink.indexOf('https://images.profile.autodesk.com') === 0) {
+        $('<img>').appendTo(elemTileImage)
+            .attr('src', params.imageLink);
+    } else if(params.number) {
         $('<div></div>').appendTo(elemTileImage)
             .addClass('tile-counter')
             .html(params.tileNumber);
@@ -2750,10 +2968,10 @@ function addTilesListChevrons(id, settings, callback) {
 function genTable(id, items, settings) {
 
     if(isBlank(settings.multiSelect)) settings.multiSelect = false;
-    if(isBlank(settings.editable)   )    settings.editable = false;
-    if(isBlank(settings.position)   )    settings.position = false;
-    if(isBlank(settings.descriptor) )  settings.descriptor = false;
-    if(isBlank(settings.quantity)   )    settings.quantity = false;
+    if(isBlank(settings.editable)   ) settings.editable    = false;
+    if(isBlank(settings.position)   ) settings.position    = false;
+    if(isBlank(settings.descriptor) ) settings.descriptor  = false;
+    if(isBlank(settings.quantity)   ) settings.quantity    = false;
     if(isBlank(settings.hideDetails)) settings.hideDetails = false;
 
     let elemContent = $('#' + id + '-content');
@@ -3298,6 +3516,170 @@ function filterList(value, elemList) {
 }
 
 
+
+// Save Dialogs with progress bars
+function resetSaveActions() {
+
+    let index = 1;
+
+    for(let key of Object.keys(saveActions)) {
+        $('.' + saveActions[key].className).removeClass(saveActions[key].className);
+        saveActions[key].index = index++;
+        saveActions[key].count = 0;
+    }
+
+}
+function showSaveDialog(id) {
+
+
+
+    if(isBlank(id)) id = 'dialog-save';
+
+    let elemDialog = $('#' + id);
+
+    if(elemDialog.length === 0) {
+
+        elemDialog = $('<div></div>').appendTo($('body'))
+            .addClass('dialog')
+            .attr('id', id);
+
+        $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-header')    
+            .html('Saving Changes');
+
+        let elemContent = $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-content');
+
+        let elemFooter = $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-footer');
+
+        $('<div></div>').appendTo(elemFooter)
+            .addClass('button')
+            .addClass('default')
+            // .addClass('disabled')
+            .addClass('confirm-save')
+            .css('float', 'unset')
+            .css('margin', 'auto')
+            .css('width', '50%')
+            .attr('id', 'confirm-save')
+            .html('Close')
+            .click(function() {
+                if($(this).hasClass('disabled')) return;
+                else {
+                    $('#overlay').hide();
+                    $(this).closest('.dialog').hide();
+                }
+            });
+
+        for(let key of Object.keys(saveActions)) {     
+            
+            let saveAction = saveActions[key];
+
+            let elemStep = $('<div></div>').appendTo(elemContent)
+                .addClass('step')
+                .attr('id', 'step-1' + saveAction.index);
+
+            $('<div></div>').appendTo(elemStep)
+                .addClass('step-label')
+                .attr('id', 'step-label-' + saveAction.index)
+                .html(saveAction.label);
+
+            let elemStepProgress = $('<div></div>').appendTo(elemStep)
+                .addClass('step-progress');
+            
+            $('<div></div>').appendTo(elemStepProgress)
+                .addClass('step-bar')
+                .attr('id', 'step-bar-' + saveAction.index)
+            
+            $('<div></div>').appendTo(elemStep)
+                .addClass('step-counter')
+                .attr('id', 'step-counter-' + saveAction.index);
+
+        }
+
+    }
+
+    $('.step-bar').addClass('transition-stopper')
+    $('.step-bar').css('width', '0%');
+    $('#overlay').show();
+    elemDialog.find('.confirm-save').addClass('disabled').removeClass('default');
+    elemDialog.find('.in-work').removeClass('in-work');
+    $('#step-1').addClass('in-work');
+    $('.step-bar').removeClass('transition-stopper');
+
+    for(let key of Object.keys(saveActions)) {
+        saveActions[key].count = $('.' + saveActions[key].className).length;
+        $('#step-counter-' + saveActions[key].index).html('0 of ' + saveActions[key].count);
+        $('#step-label-'   + saveActions[key].index).html(saveActions[key].label);
+    }
+
+    elemDialog.show();
+
+}
+function updateSaveProgressBar(action) {
+
+    let pending  = $(action.selector + '.' + action.className);
+    let progress = (action.count - pending.length) * 100 / action.count;
+
+    $('#step-bar-'     + action.index).css('width', progress + '%');
+    $('#step-counter-' + action.index).html((action.count - pending.length) + ' of ' + action.count);
+
+    if(pending.length === 0) {
+
+        let elemStep = $('#step-bar-' + action.index).closest('.step');
+
+        $('#step-bar-' + action.index).css('width', '100%');
+        elemStep.removeClass('in-work');
+        elemStep.next().addClass('in-work');
+        $('#step-counter-' + action.index).html(action.count + ' of ' + action.count);
+
+    }
+
+    return pending;
+
+}
+function storeNewItemLinks(action, elements, responses) {
+
+    let index = 0;
+
+    for(let element of elements) {
+        
+        let link = responses[index++].data.split('.autodeskplm360.net')[1];
+        
+        element.attr('data-link', link);
+        element.removeClass(action.className);
+
+    }
+
+}
+function storeNewBOMEdgeId(action, elements, responses) {
+
+    let index = 0;
+
+    for(let element of elements) {
+        
+        let edgeId = responses[index++].data.split('/bom-items/')[1];
+        
+        element.attr('data-edgeid', edgeId);
+        element.removeClass(action.className);
+
+    }
+
+}
+function endSaveProcessing(id) {
+
+    if(isBlank(id)) id = 'dialog-save';
+
+    let elemDialog = $('#' + id);
+
+    elemDialog.find('.confirm-save').removeClass('disabled').addClass('default');
+    elemDialog.find('.in-work').removeClass('in-work');    
+
+}
+
+
+
+
 // Tableau Management
 function setTableau(wsId, name, columns, filters) {
 
@@ -3556,7 +3938,7 @@ function replaceBOMItems(link, itemsPrev, itemsNext, callback) {
                 // let indexNew = 0;
 
                 for(let dataReplacement of dataReplacements) {
-                    reqBOMAdditions.push($.get('/plm/bom-add', { 
+                    reqBOMAdditions.push($.post('/plm/bom-add', { 
                         linkParent : link,
                         linkChild  : dataReplacement.linkNext, 
                         quantity   : dataReplacement.quantity, 
@@ -4008,12 +4390,13 @@ function getBOMNodeLink(id, nodes) {
 }
 function getBOMPartsList(settings, data) {
 
-    let parts = [];
+    let parts  = [];
+    let fields = settings.viewFields || settings.columns;
 
     settings.iEdge = 0;
     settings.urns  = [];
 
-    for(let field of settings.viewFields) {
+    for(let field of fields) {
         if(field.fieldId === 'QUANTITY') {
             settings.urns.quantity = field.__self__.urn;
         } else if(field.fieldId === config.items.fieldIdNumber) {
@@ -4024,14 +4407,15 @@ function getBOMPartsList(settings, data) {
         }
     }
 
-    getBOMParts(settings, parts, data.root, data.edges, data.nodes, 1.0, 2, []);
+    getBOMParts(settings, parts, data.root, data.edges, data.nodes, 1.0, 1, '', []);
 
     return parts;
 
 }
-function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, path) {
+function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, numberPath, path) {
 
     let result = { hasChildren : false };
+    let fields = settings.viewFields || settings.columns;
 
     for(let i = settings.iEdge; i < edges.length; i++) {
 
@@ -4042,17 +4426,21 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, pat
             if(i === settings.iEdge + 1) settings.iEdge = i;
 
             let node = { 
-                quantity    : getBOMEdgeValue(edge, settings.urns.quantity, null, 0) * quantity,
+                quantity    : getBOMEdgeValue(edge, settings.urns.quantity, null, 0),
                 partNumber  : getBOMCellValue(edge.child, settings.urns.partNumber, nodes),
                 linkParent  : edge.edgeLink.split('/bom-items')[0],
                 parent      : path[path.length - 1],
                 level       : level,
                 path        : path.slice(),
                 fields      : [],
-                edgeId      : edge.edgeId
+                edgeId      : edge.edgeId,
+                number      : edge.itemNumber,
+                numberPath  : numberPath + edge.itemNumber,
+                details     : {}
             }
 
             node.path.push(node.partNumber);
+            node.totalQuantity = node.quantity * quantity;
 
             result.hasChildren = true;
 
@@ -4064,7 +4452,7 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, pat
                     node.title  = bomNode.item.title;
                     node.root   = bomNode.rootItem.link;
 
-                    for(let field of settings.viewFields) {
+                    for(let field of fields) {
 
                         let fieldData = {
                             fieldId     : field.fieldId,
@@ -4073,13 +4461,16 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, pat
                             urn         : field.__self__.urn,
                             value       : ''
                         }
+                        
+                        node.details[field.fieldId] = null;
 
                         for(let nodeField of bomNode.fields) {
                             if(nodeField.metaData.urn === fieldData.urn) {
                                 fieldData.value = nodeField.value;
+                                node.details[field.fieldId] = nodeField.value;
                             }
                         }
-                            
+                        
                         node.fields.push(fieldData);
 
                     }
@@ -4090,15 +4481,15 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, pat
             }
 
             if(!isBlank(settings.selectItems)) {
-                let selectValue = getBOMCellValue(edge.child, settings.urns.selectItems, nodes);
-                if(settings.selectItems.values.includes(selectValue)) parts.push(node);
+                if(settings.selectItems.hasOwnProperty('values')) {
+                    let selectValue = getBOMCellValue(edge.child, settings.urns.selectItems, nodes);
+                    if(settings.selectItems.values.includes(selectValue)) parts.push(node);
+                } else parts.push(node);
             } else {
                 parts.push(node);
             }
 
-
-
-            let nodeBOM = getBOMParts(settings, parts, edge.child, edges, nodes, node.quantity, level + 1, node.path);
+            let nodeBOM = getBOMParts(settings, parts, edge.child, edges, nodes, node.totalQuantity, level + 1, numberPath + edge.itemNumber + '.', node.path);
 
             node.hasChildren = nodeBOM.hasChildren;
 
@@ -4109,6 +4500,48 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, pat
     return result;
 
 }
+function getBOMRollUpValues(bom, rollUps, nodeId, edge) {
+
+    let result = [];
+
+    for(let rollUp of rollUps) {
+
+        let value = 0.0;
+
+        switch(rollUp.fieldTab) {
+
+            case 'CUSTOM_BOM':
+                if(nodeId === bom.root) {
+                    for(let bomEdge of bom.edges) {
+                        if(bomEdge.parent === bom.root) {
+                            let rowValue = getBOMEdgeValue(bomEdge, rollUp.urn, null, 0.0);
+                            value += parseFloat(rowValue);
+                        }
+                    }
+                } else value = getBOMEdgeValue(edge, rollUp.urn, null, 0.0);
+                break;
+
+            default: 
+                value = getBOMCellValue(nodeId, rollUp.urn, bom.nodes);
+                break;
+
+        }
+
+        if(isBlank(value))      value = '0.00';
+        else if(value ===  '0') value = '0.00';
+        else if(value ===    0) value = '0.00';
+        else if(value ===  0.0) value = '0.00';
+        else if(value === 0.00) value = '0.00';
+        else value = Math.round(value * 100) / 100;
+
+        result.push(value);
+
+    }
+
+    return result;
+
+}
+
 
 
 
@@ -4498,7 +4931,7 @@ function updateGridData(link, key, data, deleteEmpty, callback) {
         }
 
         for(let item of data) {
-            if(item.addToGrid) requests.push($.get('/plm/add-grid-row', { link : link, data : item}))
+            if(item.addToGrid) requests.push($.post('/plm/add-grid-row', { link : link, data : item}))
 
         }
 

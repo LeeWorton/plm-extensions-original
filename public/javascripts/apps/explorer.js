@@ -1,5 +1,5 @@
 let maxRequests         = 5;
-let urns                = { partNumber : '' }
+let urns                = { partNumber : '', rollUps : [] }
 let now                 = new Date();
 let bomItems            = [];
 let editableFields      = [];
@@ -8,14 +8,16 @@ let wsItems             = { id : wsId, sections : [], fields : [], viewId : '' }
 let wsProblemReports    = { id : ''  , sections : [], fields : [] };
 let wsSupplierPackages  = { id : ''  , sections : [], fields : [] };
 let kpis                = [];
+let rollUpFields        = [];
 
 let paramsDetails = { 
-    bookmark   : true,
-    collapsed  : true,
-    editable   : true,
-    openInPLM  : true,
-    sectionsEx : ['Others'],
-    toggles    : true
+    bookmark        : true,
+    editable        : true,
+    openInPLM       : true,
+    sectionsEx      : ['AML Summary', 'Sourcing Summary', 'Others'],
+    expandSections  : ['Basic'],
+    fieldsEx        : ['ACTIONS'],
+    toggles         : true
 
 }
 let paramsAttachments = { 
@@ -48,6 +50,7 @@ $(document).ready(function() {
     wsSupplierPackages.id           = config.explorer.wsIdSupplierPackages;
     paramsProcesses.createWSID      = config.problemReports.wsId;
     paramsProcesses.fieldIdMarkup   = config.explorer.fieldIdPRImage;
+    rollUpFields                    = config.explorer.rollUpFields;
     paramsProcesses.createContext   = { fieldId : config.explorer.fieldIdPRContext };
 
     let link = '/api/v3/workspaces/' + wsId + '/items/' + dmsId;
@@ -57,6 +60,7 @@ $(document).ready(function() {
     appendProcessing('details', false);
     appendViewerProcessing();
     appendOverlay(false);
+    insertMenu();
 
     if(isBlank(wsItems.id)) wsItems.id = config.items.wsId;
 
@@ -300,14 +304,13 @@ function setUIEvents() {
 
         $('#create-connect').hide();
 
-        submitCreateForm(wsSupplierPackages.id, $('#create-connect-sections'), null, function(response ) {
+        submitCreateForm(wsSupplierPackages.id, $('#create-connect-sections'), null, {}, function(response ) {
             $('#overlay').hide();
         });
         
     });
 
 }
-
 
 
 // Retrieve Workspace Details, BOM and details
@@ -358,7 +361,6 @@ function getInitialData(callback) {
 }
 
 
-
 // Open by id or click in landing page
 function openSelectedItem(elemClicked) { openItem(elemClicked.attr('data-link')); }
 function openItem(link) {
@@ -386,6 +388,7 @@ function openItem(link) {
         selectItemVersion();
 
     });
+
 }
 function selectItemVersion() {
 
@@ -422,8 +425,6 @@ function selectItemVersion() {
     insertChangeProcesses(linkVersion, paramsProcesses);
 
 }
-
-
 
 
 // Get viewable and init Forge viewer
@@ -488,7 +489,6 @@ function initViewerDone() {
     $('#viewer-markup-image').attr('data-field-id', config.explorer.fieldIdProblemReportImage);
 
 }
-
 
 
 // Insert Selected item's data
@@ -576,18 +576,50 @@ function setBOMData(bom, flatBom) {
     let elemRoot = $('#bom-table-tree').html('');
 
     for(let field of wsItems.viewColumns) {
+
         if(field.fieldId === config.items.fieldIdNumber) urns.partNumber = field.__self__.urn;
-        else {
-            for(let kpi of kpis) {
-                if(field.fieldId === kpi.fieldId) {
-                    kpi.urn       = field.__self__.urn;
-                    kpi.fieldType = field.type.title;
-                }
+
+        if(rollUpFields.includes(field.fieldId)) {
+            urns.rollUps.push({
+                fieldId     : field.fieldId, 
+                fieldTab    : field.fieldTab,
+                displayName : field.displayName,
+                urn         : field.__self__.urn
+            });
+        }
+
+        for(let kpi of kpis) {
+            if(field.fieldId === kpi.fieldId) {
+                kpi.urn       = field.__self__.urn;
+                kpi.fieldType = field.type.title;
             }
         }
+
     }
 
-    insertNextBOMLevel(bom, elemRoot, bom.root, flatBom);
+    let rollUpValues = getBOMRollUpValues(bom, urns.rollUps, bom.root);
+
+    if(urns.rollUps.length > 0) {
+
+        $('#bom-table-tree').addClass('fixed-header');
+
+        let elemHead = $('<tr></tr>').appendTo($('#bom-table-tree'));
+
+        $('<th></th>').appendTo(elemHead).addClass('bom-color');
+        $('<th></th>').appendTo(elemHead).addClass('bom-first-col');
+
+        for(let rollUp of urns.rollUps) {
+
+            $('<th></th>').appendTo(elemHead)
+                .addClass('bom-column-roll-up')
+                .addClass('column-' + rollUp.fieldId)
+                .html(rollUp.displayName);
+
+        }
+
+    }
+
+    insertNextBOMLevel(bom, elemRoot, bom.root, flatBom, rollUpValues);
     insertFlatBOM(flatBom);
 
     for(let kpi of kpis) insertKPI(kpi);
@@ -605,7 +637,7 @@ function setBOMData(bom, flatBom) {
     });
 
 }
-function insertNextBOMLevel(bom, elemRoot, parent, flatBom) {
+function insertNextBOMLevel(bom, elemRoot, parent, flatBom, parentRollUps) {
 
     let result = false;
 
@@ -615,11 +647,13 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom) {
 
             result = true;
 
-            let title       = getBOMItem(edge.child, bom.nodes);
-            let partNumber  = getBOMCellValue(edge.child, urns.partNumber , bom.nodes);
-            let link        = getBOMNodeLink(edge.child, bom.nodes);
-            let newBOMItem  = { 'urn' : edge.child, 'part-number' : partNumber };
-            let newItem     = true;
+            let title        = getBOMItem(edge.child, bom.nodes);
+            let partNumber   = getBOMCellValue(edge.child, urns.partNumber, bom.nodes);
+            let newBOMItem   = { 'urn' : edge.child, 'part-number' : partNumber };
+            let newItem      = true;
+            let rollUpValues = getBOMRollUpValues(bom, urns.rollUps, edge.child, edge);
+
+            for(let rollUp of urns.rollUps) rollUpValues.push(getBOMCellValue(edge.child, rollUp.urn, bom.nodes));
 
             if(partNumber === '') partNumber = title.split(' - ')[0];
 
@@ -655,6 +689,8 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom) {
                     kpiLabel = (kpiValue === '' ) ? '-' : kpiValue;
                 }
 
+                if(kpiValue === '') kpiValue = '-';
+
                 newBOMItem[kpi.id] = kpiValue;
                 parseKPI(kpi, kpiValue, kpiLabel);
     
@@ -678,23 +714,56 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom) {
                     elemRow.addClass('level-' + edge.depth);
                 }
             }
-            $('<td></td>').appendTo(elemRow)
-                .addClass('bom-color');
+            
+            $('<td></td>').appendTo(elemRow).addClass('bom-color');
 
             let elemCell = $('<td></td>').appendTo(elemRow)
                 .addClass('bom-first-col');
 
-            let elemCellNumber = $('<span></span>');
-                elemCellNumber.addClass('bom-number');
-                elemCellNumber.html(edge.depth + '.' + edge.itemNumber);
-                elemCellNumber.appendTo(elemCell);
+            $('<span></span>').appendTo(elemCell)
+                .addClass('bom-number')
+                .html(edge.depth + '.' + edge.itemNumber);
 
-            let elemCellTitle = $('<span></span>');
-                elemCellTitle.addClass('bom-title');
-                elemCellTitle.html(title);
-                elemCellTitle.appendTo(elemCell);
+            $('<span></span>').appendTo(elemCell)
+                .addClass('bom-title')
+                .html(title);
 
-            let hasChildren = insertNextBOMLevel(bom, elemRoot, edge.child, flatBom);
+            if(urns.rollUps.length > 0) {
+
+                for(let index in urns.rollUps) {
+
+                    let elemCellRollUp = $('<td></td>').appendTo(elemRow)
+                        .addClass('bom-column-roll-up')
+                        .addClass('column-' + urns.rollUps[index].fieldId);
+
+                    let rollUpValue = rollUpValues[index];
+
+                    if(!isBlank(rollUpValue)) {
+
+                        let elemBar = $('<div></div>').appendTo(elemCellRollUp).addClass('bom-column-roll-up-bar');
+                        let noValue = false;
+
+                             if(rollUpValue ===      0) noValue = true;
+                        else if(rollUpValue ===    '0') noValue = true;
+                        else if(rollUpValue ===  '0.0') noValue = true;
+                        else if(rollUpValue === '0.00') noValue = true;
+
+                        if(noValue) {
+                            elemBar.css('color', 'var(--color-surface-level-1)');
+                            elemBar.html('0.00');
+                        } else {
+                            let width = (rollUpValue * 100 / parentRollUps[index]);
+                            elemBar.html(rollUpValue);
+                            elemBar.css('background', 'linear-gradient(to right, var(--color-green-600) ' + width + '%, var(--color-surface-level-3) ' + width + '%)');
+                        }
+                    
+                    }
+
+                }
+
+            }
+
+            let hasChildren = insertNextBOMLevel(bom, elemRoot, edge.child, flatBom, rollUpValues);
 
             elemRow.children().first().each(function() {
                 
@@ -717,7 +786,6 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom) {
             });
 
         }
-
     }
 
     return result;
@@ -1017,7 +1085,7 @@ function parseKPI(kpi, value, label) {
     let isNew = true;
     let type  = kpi.fieldType;
 
-    if(value !== '') {
+    if(value !== '-') {
         if(type === 'Float') value = parseFloat(value);
     }
 
@@ -1121,7 +1189,6 @@ function insertKPI(kpi) {
     }
 
 }
-
 
 
 // KPI Handling
@@ -1488,7 +1555,6 @@ function refreshKPI(kpi) {
     
 }
  
-
 
 // Display create & connect dialog
 // function showCreateDialog() {

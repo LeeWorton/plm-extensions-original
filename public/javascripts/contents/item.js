@@ -869,7 +869,8 @@ function clickWorkflowAction(elemClicked, params) {
     let link       = elemClicked.attr('data-link');
     let transition = elemClicked.val();
 
-    $.get('/plm/transition', { 'link' : link, 'transition' : transition }, function(response) {
+    $.get('/plm/transition', { link : link, transition : transition }, function(response) {
+        if(response.error) showErrorMessage('Workflow Action Failed', response.data.message);
         $('#overlay').hide();
         clickWorkflowActionDone(response.params.link, response.params.tranistion, response);
         params.onComplete(link);
@@ -972,17 +973,24 @@ function insertCreate(workspaceNames, workspaceIds, params) {
         $('#' + id + '-content').hide();
         $('#' + id + '-footer').hide();
 
-        submitCreateForm(settings.create[id].wsId, $('#' + id + '-content'), function(response) {
+        submitCreateForm(settings.create[id].wsId, $('#' + id + '-content'), settings.create[id], function(response) {
 
             $('#' + id + '-processing').hide();
             $('#' + id + '-actions').show();
             $('#' + id + '-content').show();
             $('#' + id + '-footer').show();
 
-            let link = response.data.split('.autodeskplm360.net')[1];
+            if(response.error) {
 
-            insertCreateAfterCreation(id, link);
-            settings.create[id].afterCreation(id, link, settings.create[id].contextId);
+                showErrorMessage('Error creating item', response.data.errorMessage);
+
+            } else {
+
+                let link = response.data.split('.autodeskplm360.net')[1];
+                insertCreateAfterCreation(id, link);
+                settings.create[id].afterCreation(id, link, settings.create[id].contextId);
+
+            }
 
         });
 
@@ -1170,7 +1178,9 @@ function insertCreateAfterCreation(id, link) {
     }
 
 }
-function submitCreateForm(wsIdNew, elemParent, callback) {
+function submitCreateForm(wsIdNew, elemParent, settings, callback) {
+
+    if(isBlank(settings)) settings = {};
 
     let params = { 
         wsId     : wsIdNew,
@@ -1178,23 +1188,20 @@ function submitCreateForm(wsIdNew, elemParent, callback) {
         image    : getImagePayload(elemParent)
     };
 
-    let id = elemParent.attr('id').split('-sections')[0];
     let requestsDerived = [];
 
-    if(!isBlank(settings.create[id])) {
-        if(!isBlank(settings.create[id].derived)) {
+    if(!isBlank(settings)) {
+        if(!isBlank(settings.derived)) {
 
-            for(let derivedField of settings.create[id].derived) {
-
-                let source = derivedField.source;
+            for(let derivedField of settings.derived) {
 
                 for(let section of params.sections) {
                     for(let field of section.fields) {
                         if(field.fieldId === derivedField.source) {
                    
                             requestsDerived.push($.get('/plm/derived', {
-                                wsId        : wsIdNew,                 //'craete item wsid
-                                fieldId     : derivedField.source,   //'BASE_ITEM'
+                                wsId        : wsIdNew,                         //'create item wsid
+                                fieldId     : derivedField.source,             //'BASE_ITEM'
                                 pivotItemId : field.value.link.split('/')[6]   //'dmsid of selected picklist ittem;
                             }));
 
@@ -1514,6 +1521,7 @@ function insertDetails(link, params) {
         [ 'saveButtonLabel'    , 'Save' ],
         [ 'suppressLinks'      , false ],
         [ 'toggles'            , false ],
+        [ 'workflowActions'    , false ],
         [ 'sectionsIn'         , [] ],
         [ 'sectionsEx'         , [] ],
         [ 'sectionsOrder'      , [] ],
@@ -1534,6 +1542,7 @@ function insertDetails(link, params) {
     genPanelBookmarkButton(id, settings.details[id]);
     genPanelCloneButton(id, settings.details[id]);
     genPanelOpenInPLMButton(id, settings.details[id]);
+    genPanelWorkflowActions(id, settings.details[id]);
     genPanelSearchInput(id, settings.details[id]);
     genPanelResizeButton(id, settings.details[id]);
     genPanelReloadButton(id, settings.details[id]);
@@ -1607,10 +1616,19 @@ function insertDetailsData(id) {
         setPanelBookmarkStatus(id, settings.details[id], responses);
         setPanelCloneStatus(id, settings.details[id], responses);
 
+        if(settings.details[id].workflowActions) {
+            insertWorkflowActions(settings.details[id].link, {
+                id : id + '-workflow-actions',
+                hideIfEmpty : true,
+                onComplete : function() { settings.details[id].load() }
+            });
+        }
+
         insertDetailsFields(id, responses[1].data, responses[2].data, responses[0].data, settings.details[id], function() {
             finishPanelContentUpdate(id, settings.details[id]);
             insertDetailsDataDone(id, responses[1].data, responses[2].data, responses[0].data);
         });
+
 
     });
 
@@ -1639,24 +1657,28 @@ function insertDetailsFields(id, sections, fields, data, settings, callback) {
     for(let field of fields) {
         if(!isBlank(field.derived)) {
             if(field.derived) {
+
                 let source = field.derivedFieldSource.__self__.split('/')[8];
-                let isNew = true;
+                let isNew  = true;
+
                 for(let derived of settings.derived) {
                     if(derived.source === source) {
                         isNew = false;
                         break;
                     }
                 }
+
                 if(isNew) {
                     settings.derived.push({
-                        fieldId : field.__self__.split('/')[6],
-                        source : source
+                        fieldId : field.__self__.split('/').pop(),
+                        source  : source
                     });
                 }
+                
             }
         }
     }
-    
+
     if(!isBlank(settings.sectionsOrder)) {
 
         let sort = 1;
@@ -1798,6 +1820,10 @@ function insertDetailsFields(id, sections, fields, data, settings, callback) {
                             }
                         }
                     }
+
+                    // console.log(sectionField);
+
+                    // if(sectionField.derived) included = false;
 
                     if(!included) {
                         for(let fieldValue of fieldValues) {
@@ -2044,39 +2070,37 @@ function insertDetailsField(field, data, elemFields, sectionLock, settings) {
         case 'Filtered':
             if(editable) {
                 
-                elemValue.addClass('filtered-picklist');
-                elemValue.append(elemInput);
-                elemInput.attr('data-filter-list', field.picklist);
-                elemInput.attr('data-filter-field', field.picklistFieldDefinition.split('/')[8]);
-                elemInput.addClass('filtered-picklist-input');
-                elemInput.click(function() {
-                    getFilteredPicklistOptions($(this));
-                });
+                elemValue.addClass('filtered-picklist').append(elemInput);
+                elemInput.attr('data-filter-list', field.picklist)
+                    .attr('data-filter-field', field.picklistFieldDefinition.split('/')[8])
+                    .addClass('filtered-picklist-input')
+                    .click(function() {
+                        getFilteredPicklistOptions($(this));
+                    });
                 
                 if(value !== null) elemInput.val(value);
                 
-                let elemList = $('<div></div>');
-                    elemList.addClass('filtered-picklist-options');
-                    elemList.appendTo(elemValue);
+                $('<div></div>').appendTo(elemValue)
+                    .addClass('filtered-picklist-options');
                 
-                let elemIcon = $('<div></div>');
-                    elemIcon.addClass('icon');
-                    elemIcon.addClass('icon-close');
-                    elemIcon.addClass('xxs');
-                    elemIcon.appendTo(elemValue);
-                    elemIcon.click(function() {
+                $('<div></div>').appendTo(elemValue)
+                    .addClass('icon')
+                    .addClass('icon-close')
+                    .addClass('xxs')
+                    .click(function() {
                         clearFilteredPicklist($(this));
                     });
 
             } else {
                 elemValue = $('<div></div>');
-                elemValue.addClass('string');
-                elemValue.addClass('link');
+                elemValue.addClass('string')
                 if(value !== null) {
-                    elemValue.html(value.title);
+                    if(typeof value === 'string') elemValue.html(value);
+                    else elemValue.html(value.title);
                     if(field.type.link === '/api/v3/field-types/23') {
-                        elemValue.attr('onclick', 'openItemByURN("' + value.urn + '")');
-                        elemValue.attr('data-item-link', value.link);
+                        elemValue.attr('onclick', 'openItemByURN("' + value.urn + '")')
+                            .attr('data-item-link', value.link)
+                            .addClass('link');
                     }
                 }
                 if(field.type.link === '/api/v3/field-types/23') elemValue.addClass('linking');
@@ -2606,17 +2630,18 @@ function insertAttachments(link, params) {
         tileIcon    : 'icon-pdf',
         contentSize : 's',
     }, [
-        [ 'bookmark'          , false ],
-        [ 'filterByType'      , false ],
-        [ 'folders'           , false ],
-        [ 'fileVersion'       , true  ],
-        [ 'fileSize'          , true  ],
-        [ 'includeVaultFiles' , false ],
-        [ 'split'             , false ],
-        [ 'download'          , true  ],
-        [ 'uploadLabel'       , 'Upload File' ],
-        [ 'extensionsIn'      , [] ],
-        [ 'extensionsEx'      , [] ]
+        [ 'bookmark'           , false ],
+        [ 'filterByType'       , false ],
+        [ 'folders'            , false ],
+        [ 'fileVersion'        , true  ],
+        [ 'fileSize'           , true  ],
+        [ 'includeVaultFiles'  , false ],
+        [ 'includeRelatedFiles', false ],
+        [ 'split'              , false ],
+        [ 'download'           , true  ],
+        [ 'uploadLabel'        , 'Upload File' ],
+        [ 'extensionsIn'       , [] ],
+        [ 'extensionsEx'       , [] ]
     ]);
 
     settings.attachments[id].load = function() { fileUploadDone(id); }
@@ -2737,8 +2762,9 @@ function insertAttachmentsData(id, update) {
     $('#' + id + '-no-data').hide();
     $('#' + id + '-processing').show();
 
-    if((settings.attachments[id].bookmark)) requests.push($.get('/plm/bookmarks', { link : settings.attachments[id].link })); 
-    if((settings.attachments[id].includeVaultFiles)) requests.push($.get('/plm/details', { link : settings.attachments[id].link })); 
+    if((settings.attachments[id].includeRelatedFiles)) requests.push($.get('/plm/related-attachments', { link : settings.attachments[id].link })); 
+    if((settings.attachments[id].bookmark           )) requests.push($.get('/plm/bookmarks', { link : settings.attachments[id].link })); 
+    if((settings.attachments[id].includeVaultFiles  )) requests.push($.get('/plm/details', { link : settings.attachments[id].link })); 
 
     Promise.all(requests).then(function(responses) {
 
@@ -2750,6 +2776,7 @@ function insertAttachmentsData(id, update) {
         let currentIDs  = [];
         let folders     = [];
         let listTypes   = [];
+        let listRelated = false;
 
         elemContent.find('.attachment').each(function() {
 
@@ -2768,6 +2795,11 @@ function insertAttachmentsData(id, update) {
             if(remove) $(this).remove(); else currentIDs.push(currentId);
 
         });
+
+
+        if((settings.attachments[id].includeRelatedFiles)) {
+            for(let related of responses[2].data) attachments.push(related);
+        }
 
         for(let attachment of attachments) {
 
@@ -2799,6 +2831,15 @@ function insertAttachmentsData(id, update) {
                     sortArray(folders, 'name');
 
                     let date = new Date(attachment.created.timeStamp);
+                    
+                    if(attachment.hasOwnProperty('relatedTabs')) {
+                        if(!listRelated) {
+                            $('<div></div>').appendTo(elemContent)
+                                .addClass('attachments-separator')
+                                .html('Related Files');
+                        }
+                        listRelated = true;
+                    }
 
                     let elemAttachment = $('<div></div>').appendTo(elemContent)
                         .addClass('content-item')
@@ -3075,10 +3116,12 @@ function insertVaultFile(id, elemContent, attachment, listTypes) {
 
             $('<div></div>').appendTo(elemAttachment)
                 .addClass('attachment-graphic')
+                .addClass('tile-image')
                 .append('<span class="icon ' + icon + '"></span>');
 
             let elemAttachmentDetails = $('<div></div>').appendTo(elemAttachment)
-                .addClass('attachment-details');
+                .addClass('attachment-details')
+                .addClass('tile-details');
 
             $('<div></div>').appendTo(elemAttachmentDetails)
                 .addClass('attachment-name')
@@ -3613,9 +3656,9 @@ function insertBOM(link , params) {
     if(!isBlank(params.columnsIn)) hideDetails = false;
     if(!isBlank(params.columnsEx)) hideDetails = false;
 
-
     settings.bom[id] = getPanelSettings(link, params, {
-        headerLabel : 'BOM'
+        headerLabel : 'BOM',
+        contentSize : 'l',
     }, [
         [ 'additionalRequests'  , []    ],
         [ 'bomViewName'         , ''    ],
@@ -3625,6 +3668,7 @@ function insertBOM(link , params) {
         [ 'getFlatBOM'          , false ],
         [ 'goThere'             , false ],
         [ 'hideDetails'         , hideDetails  ],
+        [ 'includeOMPartList'   , false ],
         [ 'path'                , false ],
         [ 'position'            , true  ],
         [ 'reset'               , false ],
@@ -3697,11 +3741,7 @@ function insertBOM(link , params) {
     //  Set defaults for optional parameters
     // --------------------------------------
     // let additionalRequests  = [];        // Array of additional requests which will be submitted in parallel to the BOM request
-    // let bomViewName         = '';        // Name of the BOM view in PLM to use (if no value is provided, the first view will be used)
     // let compactDisplay      = false;     // Optimizes CSS settings for a compact display
-    // let collapsed           = false;     // When enabled, the BOM will be collapsed at startup
-    // let counters            = true;      // When set to true, a footer will inidicate total items, selected items and filtered items
-    // let depth               = 10;        // BOM Levels to expand
     // let deselect            = true;      // Adds button to deselect selected element (not available if multiSelect is enabled)
     // let getFlatBOM          = false;     // Retrieve Flat BOM at the same time (i.e. to get total quantities)
     // let hideDetails         = true;      // When set to true, detail columns will be skipped, only the descriptor will be shown
@@ -3716,8 +3756,6 @@ function insertBOM(link , params) {
     // let openInPLM           = true;      // Adds button to open selected element in PLM
     // let views               = false;     // Adds drop down menu to select from the available PLM BOM views
 
-
-
     // settings.bom[id].position           = position;
     // settings.bom[id].quantity           = quantity;
     // settings.bom[id].hideDetails        = hideDetails;
@@ -3728,12 +3766,8 @@ function insertBOM(link , params) {
     // settings.bom[id].endItemValue       = null;
     // settings.bom[id].getFlatBOM         = getFlatBOM;
     // settings.bom[id].additionalRequests = additionalRequests;
-    // settings.bom[id].fieldURNPartNumber = '';
-    // settings.bom[id].fieldURNQuantity   = '';
-    // settings.bom[id].fieldURNEndItem    = '';
 
 
-    // }
     genPanelSearchInput(id, settings.bom[id]);
     genPanelResizeButton(id, settings.bom[id]);
     genPanelReloadButton(id, settings.bom[id]);
@@ -3889,7 +3923,7 @@ function changeBOMView(id) {
         }
 
         setBOMHeaders(id, elemTHead);
-        insertNextBOMLevel(id, elemTBody, responses[0].data, responses[0].data.root, 1, selectedItems, responses[1].data.items);
+        insertNextBOMLevel(id, elemTBody, responses[0].data, responses[0].data.root, 1, '', selectedItems, responses[1].data.items);
         enableBOMToggles(id);
 
         if(settings.bom[id].collapseContents) collapseAllNodes(id);
@@ -3906,8 +3940,12 @@ function changeBOMView(id) {
             dataAdditional.push(responses[indexAdditional++]);
         } 
 
+        let responseData = {};
+
+        if(settings.bom[id].includeOMPartList) responseData.bomPartsList = getBOMPartsList(settings.bom[id], responses[0].data)
+
         changeBOMViewDone(id, settings.bom[id], responses[0].data, selectedItems, dataFlatBOM, dataAdditional);
-        finishPanelContentUpdate(id, settings.bom[id]);
+        finishPanelContentUpdate(id, settings.bom[id], null, null, responseData);
 
     });
 
@@ -3931,7 +3969,7 @@ function setBOMHeaders(id, elemTHead) {
     }
 
 }
-function insertNextBOMLevel(id, elemTable, bom, parent, parentQuantity, selectedItems, workspaces) {
+function insertNextBOMLevel(id, elemTable, bom, parent, parentQuantity, numberPath, selectedItems, workspaces) {
 
     let result    = { hasChildren : false, hasRestricted : false};
     let firstLeaf = true;
@@ -4017,6 +4055,7 @@ function insertNextBOMLevel(id, elemTable, bom, parent, parentQuantity, selected
 
                         let elemRow = $('<tr></tr>').appendTo(elemTable)
                             .attr('data-number',         edge.itemNumber)
+                            .attr('data-number-path',    numberPath + edge.itemNumber)
                             .attr('data-part-number',    node.partNumber)
                             .attr('data-quantity',       node.quantity)
                             .attr('data-total-quantity', node.totalQuantity)
@@ -4129,7 +4168,7 @@ function insertNextBOMLevel(id, elemTable, bom, parent, parentQuantity, selected
                             isEndItem = (settings.bom[id].endItemValue.toString().toLowerCase() === node.endItem.toString().toLowerCase());
                         }
 
-                        let itemBOM = (isEndItem) ? { hasChildren : false, hasRestricted : false } : insertNextBOMLevel(id, elemTable, bom, urnEdgeChild, node.quantity * parentQuantity, selectedItems, workspaces);
+                        let itemBOM = (isEndItem) ? { hasChildren : false, hasRestricted : false } : insertNextBOMLevel(id, elemTable, bom, urnEdgeChild, node.quantity * parentQuantity, numberPath + edge.itemNumber + '.', selectedItems, workspaces);
 
                         if(!itemBOM.hasChildren) {
 
@@ -4442,8 +4481,9 @@ function selectInViewer(id) {
 
 }
 function clickBOMItem(elemClicked, e) {}
-function getBOMItemChhildren(elemClicked) {
+function getBOMItemChildren(elemClicked, firstLevelOnly) {
 
+    if(isBlank(firstLevelOnly)) firstLevelOnly = false;
 
     let level     = Number(elemClicked.attr('data-level'));
     let levelNext = level - 1;
@@ -4456,7 +4496,11 @@ function getBOMItemChhildren(elemClicked) {
         levelNext = Number(elemNext.attr('data-level'));
 
         if(levelNext > level) {
-            children.push(elemNext);
+            if(firstLevelOnly) {
+                if((levelNext - level) === 1 ) {
+                    children.push(elemNext); 
+                }
+            } else children.push(elemNext);
         }
 
     } while(levelNext > level);
@@ -4514,6 +4558,26 @@ function bomDisplayItem(elemItem) {
     elemBOM.animate({ scrollTop: top }, 500);
 
 }
+function bomDisplayItemByPartNumber(number, select, deselect) {
+
+    if(isBlank(select  )) select   = true;
+    if(isBlank(deselect)) deselect = true;
+
+    let bomItemLinks = [];
+
+    $('.bom-item').each(function() {
+        if(number === $(this).attr('data-part-number')) {
+            bomDisplayItem($(this));
+            bomItemLinks.push($(this).attr('data-link'));
+            if(select) $(this).addClass('selected');
+        } else {
+            if(deselect) $(this).removeClass('selected');
+        }
+    });
+
+    return bomItemLinks;
+
+}
 function expandBOMParents(level, elem) {
 
     elem.prevAll('.bom-item.node').each(function() {
@@ -4537,9 +4601,11 @@ function expandBOMParents(level, elem) {
 }
 function updateBOMPath(elemClicked) {
     
-    let elemBOM     = elemClicked.closest('.bom');
-    let id          = elemBOM.attr('id');
-    let elemPath    = $('#' + id + '-bom-path');
+    let elemBOM  = elemClicked.closest('.bom');
+    let id       = elemBOM.attr('id');
+    let elemPath = $('#' + id + '-bom-path');
+
+    if(elemPath.length === 0) return;
     
     elemPath.html('').addClass('bom-path-empty');
     
@@ -4581,6 +4647,15 @@ function updateBOMPath(elemClicked) {
 
     }
 
+}
+function resetBOMPath(id) {
+
+    let elemPath = $('#' + id + '-bom-path');
+
+    if(elemPath.length === 0) return;
+    
+    elemPath.html('').addClass('bom-path-empty');
+    
 }
 
 
@@ -5221,7 +5296,6 @@ function insertRootParentsData(id) {
                                 
                                 getRootChildren(path, responses[0].data.edges, responses[0].data.nodes, node.item.urn, 1);
 
-
                                 let contentItem = genPanelContentItem(settings.roots[id], {
                                     link        : node.item.link,
                                     title       : node.item.title,
@@ -5265,12 +5339,20 @@ function insertRootParentsData(id) {
 
                         for(let step of item.path) {
 
-                            let elemParent     = $('<div></div>').appendTo(elemCell).addClass('roots-parent').attr('data-link', item.link);
+                            let elemParent     = $('<div></div>').appendTo(elemCell)
+                                .addClass('roots-parent')
+                                .addClass('content-item')
+                                .attr('data-link', item.link)
+                                .attr('data-part-number', item.title.split(' - ')[0])
+                                .attr('data-title', item.title);
+
                             let elemParentPath = $('<div></div>').appendTo(elemParent).addClass('roots-parent-path');
 
-                            for(let i = step.level - 1; i > 0; i--) { elemParentPath.append('<span class="icon icon-east"></span>'); }
+                            for(let i = step.level - 1; i > 0; i--) { elemParentPath.append('<div class="path-icon icon icon-east"></div>'); }
 
-                            elemParentPath.append(step.title);
+                            $('<div></div>').appendTo(elemParentPath)
+                                .addClass('path-child')
+                                .html(step.title);
 
                         }
 
@@ -5334,11 +5416,13 @@ function insertParents(link, params) {
         layout      : 'list',
         tileIcon    : 'icon-product'
     }, [
-        [ 'expand'            , true ],
-        [ 'filterByLifecycle' , true ],
-        [ 'filterByWorkspace' , true ]
+        [ 'displayParentsBOM', false ],
+        [ 'filterByLifecycle', false ],
+        [ 'filterByWorkspace', false ],
+        [ 'afterParentBOMCompletion', function(id) {} ]
     ]);
 
+    settings.parents[id].expand = settings.parents[id].displayParentsBOM;
     settings.parents[id].load = function() { insertParentsData(id); }
 
     genPanelTop(id, settings.parents[id], 'parents');
@@ -5421,6 +5505,7 @@ function insertParentsData(id) {
 
                             let contentItem = genPanelContentItem(settings.parents[id], {
                                 link        : node.item.link,
+                                title       : node.item.title,
                                 subtitle    : lifecycle,
                             });
 
@@ -5448,7 +5533,7 @@ function insertParentsData(id) {
             genTable(id, items, settings.parents[id]);
         } else {
             genTilesList(id, items, settings.parents[id]);   
-            addTilesListChevrons(id, settings.parents[id], function(elemClicked) { insertParentBOM(elemClicked); });
+            addTilesListChevrons(id, settings.parents[id], function(elemClicked) { insertParentBOM(id, elemClicked); });
         }
 
         sortArray(listLifecycles, 0);
@@ -5462,7 +5547,7 @@ function insertParentsData(id) {
     });
 
 }
-function insertParentBOM(elemClicked) {
+function insertParentBOM(id, elemClicked) {
 
     let elemParent = elemClicked.closest('.content-item');
     let linkParent = elemParent.attr('data-link');
@@ -5473,13 +5558,14 @@ function insertParentBOM(elemClicked) {
         
         $('<div></div>').insertAfter(elemParent)
             .attr('id', idBOM)    
-            .addClass('parent-bom') 
+            .addClass('parent-bom');
                 
         insertBOM(linkParent, {
-            'id'        : idBOM,
-            'title'     : '',
-            'toggles'   : true,
-            'search'    : true
+            id               : idBOM,
+            hideHeader       : true,
+            title            : '',
+            collapseContents : true,
+            afterCompletion  : function() { settings.parents[id].afterParentBOMCompletion(idBOM); }
         });
 
     } else {
@@ -5491,6 +5577,7 @@ function insertParentBOM(elemClicked) {
 }
 function insertParentsDone(id)  {}
 function insertParentsDataDone(id, data)  {}
+
 
 
 
@@ -7137,11 +7224,17 @@ function insertItemSummaryContents(id, details, fields, tabs) {
 
         if(isBlank(content.params)) content.params = {};
 
-        let link      = (isBlank(content.link)) ? settings.summary[id].link : content.link;
+        let link      = settings.summary[id].link;
         let contentId = (isBlank(content.params.id)) ? 'item-' + content.type : content.params.id;
         let className = (isBlank(content.className)) ? settings.summary[id].contentSurfaceLevel : content.className;
         let elemTop   = $('#' + contentId);
         
+        if(!isBlank(content.link)) {
+            if(content.link.indexOf('/') < 0) {
+                link = getSectionFieldValue(details.sections, content.link, '', 'link');
+            } else link = content.link;
+        }
+
         if(settings.summary[id].layout === 'sections') {
             content.params.headerToggle = true;
         }
@@ -7201,6 +7294,13 @@ function insertItemSummaryContents(id, details, fields, tabs) {
                 if(tabsAccessible.includes('BOM_LIST')) {
                     insertItemSummaryContentTab(id, contentId, 'Flat BOM', content.params, isFirst);          
                     insertFlatBOM(link, content.params);
+                } 
+                break;
+
+            case 'parents':
+                if(tabsAccessible.includes('BOM_WHERE_USED')) {
+                    insertItemSummaryContentTab(id, contentId, tabLabels.BOM_WHERE_USED, content.params, isFirst);          
+                    insertParents(link, content.params);
                 } 
                 break;
 

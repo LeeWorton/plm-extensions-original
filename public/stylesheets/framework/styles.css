@@ -95,6 +95,84 @@
 
 
 
+/*  MENU */
+/* ----------------------------------------------------------------------------- */
+#menu-button {
+    margin-top  : 15px !important;
+    margin-left : 26px;
+}
+#menu {
+    display     : none;
+    position    : absolute;
+    top         : 12px;
+    left        : 23px;
+    color       : black;
+    z-index     : 10;
+}
+#menu-icon {
+    background      : white;
+    border-radius   : 10px 10px 0px 0px;
+    height          : 26px;
+    padding         : 10px;
+}
+#menu-columns {
+    box-shadow      : 4px 4px 8px 1px var(--color-surface-level-3);
+    display         : flex;
+    background      : white;
+    border-radius   : 0px 10px 10px 10px;
+    gap             : 20px;
+    overflow        : auto;
+    padding         : 20px;
+}
+.menu-title {
+    padding         : 0px 12px 12px;
+    border-bottom   : 1px solid var(--color-gray-300);
+    margin          : 12px 12px 6px 12px;
+    font-size       : 16px;
+}
+.menu-commands {
+    display         : flex;
+    flex-direction  : column;
+    gap             : 0px;
+}
+.menu-command {
+    cursor  : pointer;
+    display : flex;
+    gap     : 12px;
+    padding : 10px 16px 10px 10px;
+}
+.menu-command-icon {
+    background      : var(--color-gray-100);
+    border-radius   : 3px;
+    font-size       : 22px;
+    height          : 38px;
+    line-height     : 38px;
+    text-align      : center;
+    width           : 38px;
+}
+.menu-command-name {
+    display         : flex;
+    flex-direction  : column;
+}
+.menu-command-title {
+    font-size   : 14px;
+    font-weight : 700;
+    line-height : 18px;
+    padding-top : 2px;
+}
+.menu-command-subtitle {
+    height      : 16px;
+    line-height : 16px;
+    font-size   : 12px;
+}
+.menu-command:hover {
+    background : var(--color-gray-100);
+}
+.menu-command:hover .menu-command-icon {
+    background : var(--color-gray-400);
+}
+
+
 
 /*  AVATARS */
 /* ----------------------------------------------------------------------------- */
@@ -137,8 +215,10 @@
 
 /* ----- Tile Toggles ----- */
 .tile-toggle {
-    text-align  : center;
-    width       : 30px;
+    font-size    : 20px;
+    padding-left : 10px;
+    text-align   : center;
+    width        : 30px;
 }
 .tile-toggle:hover {
     color : var(--color-blue-500);
@@ -252,7 +332,7 @@
 
 /* ----- Themes ----- */
              .surface-level-1 > .tile,              .surface-level-1 > .tiles > .tile { background : var(--color-surface-level-3); border-color : var(--color-surface-level-1); }
-             .surface-level-2 > .tile,              .surface-level-2 > .tiles > .tile { background : var(--color-surface-level-4); border-color : var(--color-surface-level-2); }
+             .surface-level-2 > .tile,              .surface-level-2 > .tiles > .tile { background : var(--color-surface-level-3); border-color : var(--color-surface-level-2); }
  .dark-theme .surface-level-3 > .tile,  .dark-theme .surface-level-3 > .tiles > .tile { background : var(--color-surface-level-1); border-color : var(--color-surface-level-3); }
 .black-theme .surface-level-3 > .tile, .black-theme .surface-level-3 > .tiles > .tile { background : var(--color-surface-level-1); border-color : var(--color-surface-level-3); }
 .light-theme .surface-level-3 > .tile, .light-theme .surface-level-3 > .tiles > .tile { background : var(--color-surface-level-4); border-color : var(--color-surface-level-3); }
@@ -260,7 +340,7 @@
              .surface-level-5 > .tile,              .surface-level-5 > .tiles > .tile { background : var(--color-surface-level-1); border-color : var(--color-surface-level-5); }
 
              .surface-level-1 > .tile > .tile-image, .surface-level-1 > .tiles > .tile > .tile-image { background : var(--color-surface-level-4); }
-             .surface-level-2 > .tile > .tile-image, .surface-level-2 > .tiles > .tile > .tile-image  { background : var(--color-surface-level-5); }
+             .surface-level-2 > .tile > .tile-image, .surface-level-2 > .tiles > .tile > .tile-image { background : var(--color-surface-level-4); }
  .dark-theme .surface-level-3 .tile-image,  .dark-theme .surface-level-3 > .tiles > .tile > .tile-image { background : var(--color-surface-level-2); }
 .black-theme .surface-level-3 .tile-image, .black-theme .surface-level-3 > .tiles > .tile > .tile-image { background : var(--color-surface-level-2); }
 .light-theme .surface-level-3 .tile-image, .light-theme .surface-level-3 > .tiles > .tile > .tile-image { background : var(--color-surface-level-5); }
@@ -634,6 +714,27 @@
 
 
 
+/*  CONTENT ITEM TABLES */
+/* ----------------------------------------------------------------------------- */
+.panel-content.xxs > table > thead > tr > th { padding :  2px  1px; }
+.panel-content.xs  > table > thead > tr > th { padding :  2px  2px; }
+.panel-content.s   > table > thead > tr > th { padding :  4px  4px; }
+.panel-content.m   > table > thead > tr > th { padding :  6px  6px; }
+.panel-content.l   > table > thead > tr > th { padding :  8px  8px; }
+.panel-content.xl  > table > thead > tr > th { padding : 10px 10px; }
+.panel-content.xxl > table > thead > tr > th { padding : 12px 12px; }
+
+.panel-content.xxs > table > tbody > tr > td { padding :  1px  1px; }
+.panel-content.xs  > table > tbody > tr > td { padding :  2px  2px; }
+.panel-content.s   > table > tbody > tr > td { padding :  4px  4px; }
+.panel-content.m   > table > tbody > tr > td { padding :  6px  6px; }
+.panel-content.l   > table > tbody > tr > td { padding :  8px  8px; }
+.panel-content.xl  > table > tbody > tr > td { padding : 10px 10px; }
+.panel-content.xxl > table > tbody > tr > td { padding : 12px 12px; }
+
+
+
+
 /*  THUMBNAILS */
 /* ----------------------------------------------------------------------------- */
 .thumbnail-square-xl    { height:    128px; width: 128px; }
@@ -667,8 +768,8 @@
 /* ----------------------------------------------------------------------------- */
 #header {
     display     : flex;
-    height      : 28px;
-    padding     : 20px 56px 20px; 
+    height      : 68px;
+    padding     : 0px; 
     position    : absolute;
     top         : 0px;
     right       : 0px;
@@ -679,10 +780,10 @@
     background-size     : 66px;
     cursor              : pointer;
     height              : 28px;
-    width               : 48px;
-    position            : absolute;
-    top                 : 18px;
-    left                : 8px;
+    margin              : 18px 0px 22px 8px;
+    max-width           : 56px;
+    min-width           : 56px;
+    width               : 56px;
 }
 .light-theme #header-logo {
     background-image: url(../../images/autodesk-logo-black.png);
@@ -691,33 +792,43 @@
     cursor      : pointer;
     font-size   : 22px;
     font-weight : 800;
-    line-height : 28px;
+    line-height : 68px;
     margin-left : 10px;
+    white-space : nowrap;
 }
 #header-subtitle {
     border-left     : 1px solid var(--color-font);
     cursor          : pointer;
     font-size       : 20px;
-    line-height     : 28px;
-    margin-left     : 24px;
+    height          : 36px;
+    line-height     : 36px;
+    margin          : 16px 24px 16px 24px;
+    min-width       : 100px;
     padding-left    : 24px;
 }
 #header-descriptor {
     font-size   : 18px;
     font-weight : 700;
-    line-height : 16px;
+    line-height : 20px;
+    white-space : nowrap;
 }
 #header-description {
     font-size   : 12px;
-    line-height : 18px;
+    line-height : 16px;
+}
+#header-subtitle,
+#header-subtitle > div {
+    overflow      : hidden;
+    text-overflow : ellipsis;
+    white-space   : nowrap;
 }
 #header-toolbar {
-    display     : flex;
-    gap         : var(--spacer-xs);
-    position    : absolute;
-    top         : 13px;
-    right       : 32px;
-    height      : 42px;
+    display         : flex;
+    flex-grow       : 1;
+    gap             : var(--spacer-xs);
+    height          : 42px;
+    justify-content : end;
+    margin          : 13px 32px 0px 0px;
 }
 #header-toolbar select {
     height  : 38px;
@@ -985,6 +1096,11 @@ and (max-device-width : 1900px)  {
     justify-content : end;
     padding-right   : 14px;
 }
+.panel-top.surface-level-1 > .panel-header > .panel-controls { background : var(--color-surface-level-1); }
+.panel-top.surface-level-2 > .panel-header > .panel-controls { background : var(--color-surface-level-2); }
+.panel-top.surface-level-3 > .panel-header > .panel-controls { background : var(--color-surface-level-3); }
+.panel-top.surface-level-4 > .panel-header > .panel-controls { background : var(--color-surface-level-4); }
+.panel-top.surface-level-5 > .panel-header > .panel-controls { background : var(--color-surface-level-5); }
 
 .panel-controls > .button.material-symbols-sharp {
     line-height: 36px;
@@ -1031,10 +1147,12 @@ and (max-device-width : 1900px)  {
     width       : 96px;
 }
 .panel-controls > .panel-search > .button {
-    height      : 22px;
-    width       : 22px;
-    line-height : 22px;
     font-size   : 22px;
+    height      : 22px;
+    line-height : 22px;
+    max-width   : 22px;
+    min-width   : 22px;
+    width       : 22px;
 }
 
 
@@ -1357,7 +1475,7 @@ and (max-device-width : 1900px)  {
 }
 
 .surface-level-1 td.content-column-number { background : var(--color-surface-level-4); }
-.surface-level-2 td.content-column-number { background : var(--color-surface-level-3); }
+.surface-level-2 td.content-column-number { background : var(--color-surface-level-5); }
 .surface-level-3 td.content-column-number { background : var(--color-surface-level-3); }
 .surface-level-4 td.content-column-number { background : var(--color-surface-level-1); }
 .surface-level-5 td.content-column-number { background : var(--color-surface-level-1); }
@@ -1716,6 +1834,26 @@ tr.selected > td.content-item-check-box > .icon::before {
 .with-panel-actions > .no-data {
     margin-top : 96px;
 }
+.no-data.row {
+    flex-direction  : row;
+    gap             : 8px;
+    justify-content : center;
+    margin-top      : 0px;
+    position        : absolute;
+    top             : 56px;
+    right           : 0px;
+    left            : 0px;
+}
+.no-data.row > div {
+    padding : 0px;
+}
+.no-data.row.xxs > div { line-height :  26px; } .no-data.row.xxs > .no-data-icon { font-size : 24px; } 
+.no-data.row.xs  > div { line-height :  36px; } .no-data.row.xs  > .no-data-icon { font-size : 32px; } 
+.no-data.row.s   > div { line-height :  48px; }
+.no-data.row.m   > div { line-height :  64px; }
+.no-data.row.l   > div { line-height : 120px; }
+.no-data.row.xl  > div { line-height : 190px; }
+.no-data.row.xxl > div { line-height : 280px; }
 
 
 /*  TABS */
@@ -1882,7 +2020,7 @@ select.button.main:hover {
     font-weight : 300;
     height      : 36px;
     line-height : 36px;
-    min-width   : auto;
+    min-width   : 36px;
     padding     : 0px;
     width       : 36px;
     text-rendering          : optimizeLegibility;

@@ -19,9 +19,13 @@ let wsProblemReports        = { 'id' : '', 'sections' : [], 'fields' : [] };
 let wsSparePartsRequests    = { 'id' : '', 'sections' : [], 'fields' : [] };
 
 let paramsDetails = {
-    collapseSections : true,
+    collapseContents : true,
+    headerLabel      : 'descriptor',
     layout           : 'narrow',
-    toggles          : true
+    toggles          : true,
+    fieldsEx         : ['ACTIONS'],
+    sectionsEx       : ['Sourcing Summary','Others'],
+    expandSections   : ['Basic']
 }
 
 let paramsAttachments = { 
@@ -29,6 +33,7 @@ let paramsAttachments = {
     headerLabel     : 'Item Attachments',
     layout          : 'row',
     reload          : false,
+    filterByType    : true,
     contentSize     : 'l'
 }
 
@@ -42,7 +47,8 @@ let paramsProcesses = {
     fieldIdMarkup       : '',
     openInPLM           : true,
     reload              : true,
-    singleToolbar : 'actions'
+    contentSize         : 'm',
+    singleToolbar       : 'actions'
 }
 
 
@@ -50,6 +56,7 @@ $(document).ready(function() {
 
     appendProcessing('items');
     appendOverlay();
+    insertMenu();
 
     let requests = [];
 
@@ -126,7 +133,6 @@ $(document).ready(function() {
                 columnsEx         : ['Requested By'],
                 onClickItem       : function(elemClicked) { openRequest(elemClicked); }
             });
-
 
         }
 
@@ -334,7 +340,7 @@ function openItem(link, linkProduct) {
         counters      : true,
         getFlatBOM    : true, 
         showRestricted: false,
-        revisionBias  : 'working',
+        revisionBias  : config.service.revisionBias,
         endItem       : config.service.endItemFilter,
         search        : true,
         selectItems   : { fieldId : config.service.fieldId, values : config.service.fieldValues },
@@ -357,7 +363,7 @@ function openRequest(elemClicked) {
         bookmark : false,
         contents : [
             { type : 'workflow-history', className : 'surface-level-1', params : { id : 'request-workflow-history' } },
-            { type : 'details'         , className : 'surface-level-1', params : { id : 'request-details', collapsed : true, suppressLinks : true, sectionsEx : config.service.requestSectionsExcluded } },
+            { type : 'details'         , className : 'surface-level-1', params : { id : 'request-details', expandSections : config.service.requestSectionsExpanded, suppressLinks : true, sectionsEx : config.service.requestSectionsExcluded } },
             { type : 'grid'            , className : 'surface-level-1', params : { id : 'request-grid', headerLabel : 'Part List', columnsEx : config.service.requestColumnsExcluded } },
             { type : 'attachments'     , className : 'surface-level-1', params : { id : 'request-attachments', editable : true, layout : 'tiles', singleToolbar : 'controls' } },
         ],
@@ -911,9 +917,9 @@ function clickBOMItem(elemClicked, e) {
 
     if(elemClicked.hasClass('selected')) {
         // elemClicked.removeClass('selected');
-        if(applicationFeatures.toggleItemDetails)     insertDetails('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsDetails);
-        if(applicationFeatures.toggleItemAttachments) insertAttachments('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsAttachments);
-        if(applicationFeatures.manageProblemReports)  insertChangeProcesses('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsProcesses);
+        if(applicationFeatures.toggleItemDetails)     insertDetails(elemClicked.attr('data-link'), paramsDetails);
+        if(applicationFeatures.toggleItemAttachments) insertAttachments(elemClicked.attr('data-link'), paramsAttachments);
+        if(applicationFeatures.manageProblemReports)  insertChangeProcesses(elemClicked.attr('data-link'), paramsProcesses);
         
         setSparePartsList(elemClicked);
         // updateViewer();
@@ -927,6 +933,11 @@ function clickBOMItem(elemClicked, e) {
         if(applicationFeatures.toggleItemDetails)     insertDetails(elemClicked.attr('data-link'), paramsDetails);
         if(applicationFeatures.toggleItemAttachments) insertAttachments(elemClicked.attr('data-link'), paramsAttachments);
         if(applicationFeatures.manageProblemReports)  insertChangeProcesses(elemClicked.attr('data-link'), paramsProcesses);
+
+        if(applicationFeatures.toggleItemDetails)     insertDetails('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsDetails);
+        if(applicationFeatures.toggleItemAttachments) insertAttachments('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsAttachments);
+        if(applicationFeatures.manageProblemReports)  insertChangeProcesses('/api/v3/workspaces/' + wsId + '/items/' + dmsId, paramsProcesses);
+
         resetSparePartsList();
         viewerResetSelection({
             fitToView : true
@@ -945,7 +956,7 @@ function clickBOMDeselectAllDone() {
     
     let link = $('#bom').attr('data-link');
 
-    if(applicationFeatures.toggleItemDetails) insertDetails(link);
+    if(applicationFeatures.toggleItemDetails) insertDetails(link, paramsDetails);
     if(applicationFeatures.toggleItemAttachments) insertAttachments(link, paramsAttachments);
     resetSparePartsList();
     updateViewer();
@@ -1156,7 +1167,7 @@ function clickSparePart(elemClicked) {
 
     let link = elemClicked.attr('data-link');
 
-    if(applicationFeatures.toggleItemDetails) insertDetails(link);
+    if(applicationFeatures.toggleItemDetails) insertDetails(link, paramsDetails);
     if(applicationFeatures.toggleItemAttachments) insertAttachments(link, paramsAttachments);
     viewerSelectModel(elemClicked.attr('data-part-number'), { 'highlight' : false , 'isolate' : true } );
 
@@ -1204,7 +1215,7 @@ function onViewerSelectionChanged(event) {
                                 setSparePartsList($(this));
                                 toggleBOMItemActions($(this));
                                 // updateBOMCounters('bom');
-                                if(applicationFeatures.toggleItemDetails)     insertDetails(linkItem);
+                                if(applicationFeatures.toggleItemDetails)     insertDetails(linkItem, paramsDetails);
                                 if(applicationFeatures.toggleItemAttachments) insertAttachments(linkItem, paramsAttachments);
                                 if(applicationFeatures.manageProblemReports)  insertChangeProcesses(linkItem, paramsProcesses);
                             }
@@ -1229,7 +1240,7 @@ function onViewerSelectionChanged(event) {
             setSparePartsList(elemContext);
             toggleBOMItemActions(elemContext);
             // updateBOMCounters('bom');
-            if(applicationFeatures.toggleItemDetails)     insertDetails(linkItem);
+            if(applicationFeatures.toggleItemDetails)     insertDetails(linkItem, paramsDetails);
             if(applicationFeatures.toggleItemAttachments) insertAttachments(linkItem, paramsAttachments);
             if(applicationFeatures.manageProblemReports)  insertChangeProcesses(linkItem, paramsProcesses);            
 
@@ -1373,7 +1384,7 @@ function submitRequest() {
                     ]
                 }
                 
-                $.get('/plm/add-grid-row', params, function(response) {});
+                $.post('/plm/add-grid-row', params, function(response) {});
 
             });
 

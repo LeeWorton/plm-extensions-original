@@ -26,6 +26,12 @@ router.get('/troubleshooting', function(req, res, next) {
         theme : (typeof req.query.theme === 'undefined') ? req.app.locals.defaultTheme : req.query.theme
     });
 });
+router.get('/start', function(req, res, next) {
+    res.render('framework/start.pug', {
+        title : 'PLM UX Extensions',
+        theme : (typeof req.query.theme === 'undefined') ? req.app.locals.defaultTheme : req.query.theme
+    });
+});
 
 
 
@@ -52,6 +58,7 @@ router.get('/portfolio'     , function(req, res, next) { launch('apps/portfolio'
 router.get('/projects'      , function(req, res, next) { launch('apps/projects'        , 'Projects Dashboard'           , req, res, next); });
 router.get('/reports'       , function(req, res, next) { launch('apps/reports'         , 'Reports Dashboard'            , req, res, next); });
 router.get('/reviews'       , function(req, res, next) { launch('apps/reviews'         , 'Design Reviews'               , req, res, next); });
+router.get('/sbom'          , function(req, res, next) { launch('apps/sbom'            , 'Service BOM Editor'           , req, res, next); });
 router.get('/service'       , function(req, res, next) { launch('apps/service'         , 'Services Portal'              , req, res, next); });
 router.get('/variants'      , function(req, res, next) { launch('apps/variants'        , 'Variant Manager'              , req, res, next); });
 
@@ -63,20 +70,21 @@ router.get('/variants'      , function(req, res, next) { launch('apps/variants' 
 router.get('/data'                , function(req, res, next) { launch('admin/data'                , 'Data Manager'                   , req, res, next); });
 router.get('/helpers'             , function(req, res, next) { launch('admin/helpers'             , 'Administration Helper Utilities', req, res, next); });
 router.get('/insights'            , function(req, res, next) { launch('admin/insights'            , 'Tenant Insights Dashboard'      , req, res, next); });
+router.get('/outstanding-work'    , function(req, res, next) { launch('admin/outstanding-work'    , 'Outstanding Work Report'        , req, res, next); });
 router.get('/users'               , function(req, res, next) { launch('admin/users'               , 'User Settings Manager'          , req, res, next); });
 router.get('/workspace-comparison', function(req, res, next) { launch('admin/workspace-comparison', 'Workspace Comparison'           , req, res, next); });
 
 
 
 /* ------------------------------------------------------------------------------
-    INVENTOR ADDINS
+    Vault & INVENTOR ADDINS
    ------------------------------------------------------------------------------ */
-router.get('/addins/context' , function(req, res, next) { launch('addins/context' , 'Context Browser'   , req, res, next); });
-router.get('/addins/item'    , function(req, res, next) { launch('addins/item'    , 'Item Master'       , req, res, next); });
-router.get('/addins/login'   , function(req, res, next) { launch('addins/login'   , 'PLM Login'         , req, res, next); });
-router.get('/addins/navigate', function(req, res, next) { launch('addins/navigate', 'Data Navigator'    , req, res, next); });
-router.get('/addins/search'  , function(req, res, next) { launch('addins/search'  , 'Search'            , req, res, next); });
-router.get('/addins/tasks'   , function(req, res, next) { launch('addins/tasks'   , 'Task Management'   , req, res, next); });
+router.get('/addins/context'   , function(req, res, next) { launch('addins/context'   , 'Context Browser', req, res, next); });
+router.get('/addins/item'      , function(req, res, next) { launch('addins/item'      , 'Item Master'    , req, res, next); });
+router.get('/addins/login'     , function(req, res, next) { launch('addins/login'     , 'Autodesk Login' , req, res, next); });
+router.get('/addins/pdm-search', function(req, res, next) { launch('addins/pdm-search', 'PDM Search'     , req, res, next); });
+router.get('/addins/projects'  , function(req, res, next) { launch('addins/projects'  , 'PLM Projects'   , req, res, next); });
+router.get('/addins/tasks'     , function(req, res, next) { launch('addins/tasks'     , 'My Tasks'       , req, res, next); });
 
 
 
@@ -92,7 +100,8 @@ router.get('/template', function(req, res, next) { launch('tutorial/1-template' 
     APPLICATIONS IN DEVELOPMENT
    ------------------------------------------------------------------------------ */
 router.get('/assets'        , function(req, res, next) { launch('dev/assets'          , 'Asset Management'                  , req, res, next); });
-// router.get('/asset-services', function(req, res, next) { launch('dev/asset-services'  , 'Asset Services Portal'             , req, res, next); });
+router.get('/asset-services', function(req, res, next) { launch('dev/asset-services'  , 'Asset Services Portal'             , req, res, next); });
+router.get('/mpe'           , function(req, res, next) { launch('dev/mpe'             , 'Manufacturing Process Editor'      , req, res, next); });
 router.get('/browser'       , function(req, res, next) { launch('dev/browser'         , 'PLM Browser'                       , req, res, next); });
 router.get('/change'        , function(req, res, next) { launch('dev/change'          , 'Change Manager'                    , req, res, next); });
 router.get('/configurator'  , function(req, res, next) { launch('dev/configurator'    , 'Product Configuration Editor'      , req, res, next); });
@@ -100,12 +109,13 @@ router.get('/control'       , function(req, res, next) { launch('dev/control'   
 router.get('/customer'      , function(req, res, next) { launch('dev/customer'        , 'Customer Services'                 , req, res, next); });
 router.get('/editor'        , function(req, res, next) { launch('dev/editor'          , 'Content Editor'                    , req, res, next); });
 router.get('/matrix'        , function(req, res, next) { launch('dev/matrix'          , 'Portfolio Matrix'                  , req, res, next); });
-// router.get('/mbom-upgrade'  , function(req, res, next) { launch('dev/mbom-upgrade'    , 'MBOM Upgrade Editor'               , req, res, next); });
+router.get('/mbom-upgrade'  , function(req, res, next) { launch('dev/mbom-upgrade'    , 'MBOM Upgrade Editor'               , req, res, next); });
 router.get('/pdm'           , function(req, res, next) { launch('dev/pdm'             , 'Vault Browser'                     , req, res, next); });
 router.get('/pdm-explorer'  , function(req, res, next) { launch('dev/pdm-explorer'    , 'PDM Explorer'                      , req, res, next); });
 router.get('/pnd'           , function(req, res, next) { launch('dev/pnd'             , 'Product Data & Processes Explorer' , req, res, next); });
-router.get('/sbom'          , function(req, res, next) { launch('dev/sbom'            , 'Asset BOM Editor'                  , req, res, next); });
+router.get('/resources'     , function(req, res, next) { launch('dev/resources'       , 'Resource Allocation'               , req, res, next); });
 router.get('/specification' , function(req, res, next) { launch('dev/specification'   , 'Product Specification Editor'      , req, res, next); });
+router.get('/transmittals'  , function(req, res, next) { launch('dev/transmittals'    , 'Transmittals Client'               , req, res, next); });
 
       
 
@@ -159,6 +169,7 @@ function launch(appURL, appTitle, req, res, next) {
         let reqNumber       = '';
         let reqFileId       = '';
         let reqOptions      = '';
+        let reqHost         = '';
         let reqRevisionBias = 'release';
         
         for(let key in req.query) {
@@ -169,9 +180,12 @@ function launch(appURL, appTitle, req, res, next) {
                 case 'number'       :       reqNumber = req.query[key]; break;
                 case 'fileid'       :       reqFileId = req.query[key]; break;
                 case 'options'      :      reqOptions = req.query[key]; break;
+                case 'host'         :         reqHost = req.query[key]; break;
                 case 'revisionbias' : reqRevisionBias = req.query[key]; break;
             }
         }
+
+        reqHost = reqHost.toLowerCase();
 
         getVaultId(req, function() {
 
@@ -189,6 +203,7 @@ function launch(appURL, appTitle, req, res, next) {
             console.log('  vaultName        = ' + req.app.locals.vaultName); 
             console.log('  vaultId          = ' + req.session.vaultId); 
             console.log('  theme            = ' + reqTheme); 
+            console.log('  host             = ' + reqHost); 
             console.log('  wsId             = ' + reqWS); 
             console.log('  dmsId            = ' + reqDMS); 
             console.log('  number           = ' + reqNumber); 
@@ -203,6 +218,7 @@ function launch(appURL, appTitle, req, res, next) {
                     number       : reqNumber,
                     revisionBias : reqRevisionBias,
                     theme        : reqTheme,
+                    host         : reqHost,
                     options      : reqOptions.split(',')
                 });
 
@@ -213,13 +229,15 @@ function launch(appURL, appTitle, req, res, next) {
                     tenant       : req.app.locals.tenant,
                     tenantLink   : req.app.locals.tenantLink,
                     theme        : reqTheme,
+                    host         : reqHost,
                     wsId         : reqWS,
                     dmsId        : reqDMS,
                     fileId       : reqFileId,
                     vaultId      : req.session.vaultId,
-                    options      : reqOptions.split(','),
                     revisionBias : reqRevisionBias,
-                    config       : req.app.locals.config
+                    options      : reqOptions.split(','),
+                    config       : req.app.locals.config,
+                    menu         : req.app.locals.menu
                 });    
                 
             }

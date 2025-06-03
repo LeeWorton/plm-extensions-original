@@ -21,6 +21,8 @@ function getCustomHeaders(req) {
 
 function sendResponse(req, res, response, error) {
 
+    if(typeof req.body === 'undefined') req.body = {};
+
     let result = {
         'url'       : req.url,
         'params'    : (Object.keys(req.body).length === 0) ? req.query : req.body,
@@ -223,7 +225,7 @@ router.get('/connect', function(req, res, next) {
         }
         res.json(result);
     }).catch(function(error) {
-        sendResponse(req, res, error.response, true);
+        sendResponse(req, res, error.response, false);
     });
     
 });
@@ -763,7 +765,7 @@ router.get('/search-items', function(req, res, next) {
     }).then(function(response) {
         sendResponse(req, res, response, false);
     }).catch(function(error) {
-        console.log(error);
+        error.response.data.results = [];
         sendResponse(req, res, error.response, true);
     });
     
@@ -777,7 +779,6 @@ router.get('/search-advanced', function(req, res, next) {
     console.log(' ');
     console.log('  /vault/search-advanced');
     console.log(' --------------------------------------------');
-    // console.log('  req.session.vaultId  = ' + req.session.vaultId);
     console.log('  req.query.query    = ' + req.query.query);
     console.log('  req.query.limit    = ' + req.query.limit);
     console.log('  req.query.entities = ' + req.query.entities);

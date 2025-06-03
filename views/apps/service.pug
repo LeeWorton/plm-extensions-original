@@ -7,7 +7,8 @@ block head
     script(src='/javascripts/apps/service.js')
     script(src='/javascripts/custom/service.js')
     script.
-        config = !{JSON.stringify(config)};
+        config = !{JSON.stringify(config)}
+        menu   = !{JSON.stringify(menu)};
 
 block body
 
@@ -21,8 +22,8 @@ block body
                 #home.button.with-icon.icon-home.requires(title='Close this product display and return to landing page') Home
                 #toggle-bom.button.with-icon.icon-bom-tree(title='Toggle BOM display on/off') Toggle BOM
                 #toggle-attachments.button.with-icon.icon-pdf(title='Toggle selected items files list on/off') Toggle Files
-                #toggle-details.button.with-icon.icon-details(title='Toggle selected item details on/off') Toggle Details
                 #toggle-panel.button.with-icon.icon-tiles-list(title='Toggle right hand side panel on and off') Toggle Panel
+                #toggle-details.button.with-icon.icon-details(title='Toggle selected item details on/off') Toggle Details
                 #header-avatar
 
         .screen#landing 
@@ -39,7 +40,7 @@ block body
 
             #details.panel.surface-level-2
 
-            .panel#panel.surface-level-1
+            .panel#panel.surface-level-2
                 #cart.surface-level-3.collapsed
                     #cart-header
                         #cart-title.with-icon Your Cart
@@ -60,9 +61,9 @@ block body
                         .button.icon.icon-stock#color-stock(title='Display spare part availability in viewer')
                         .button.with-icon.icon-search-list
                             input#spare-parts-search-input(placeholder="Search")
-                    #items-content.list.tiles.l.no-scrollbar.surface-level-1
-                .panel-content.tab-group-main#documentation.surface-level-1
-                .panel-content.tab-group-main#processes.surface-level-1
+                    #items-content.list.tiles.l.no-scrollbar.surface-level-2
+                .panel-content.tab-group-main#documentation.surface-level-2
+                .panel-content.tab-group-main#processes.surface-level-2
                 .panel-content.tab-group-main#charts
                     #charts-list
                         .chart-title Wear Parts

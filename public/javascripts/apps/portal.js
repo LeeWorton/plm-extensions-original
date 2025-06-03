@@ -1,6 +1,7 @@
 $(document).ready(function() {
     
     setUIEvents();
+    insertMenu();
 
     getFeatureSettings('portal', [], function() {
 
@@ -75,6 +76,7 @@ function openItem(elemClicked) {
         toggles             : true,
         search              : true,
         path                : true,
+        counters            : true,
         tableColumnsLimit   : 1
     });
 

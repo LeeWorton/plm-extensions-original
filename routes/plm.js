@@ -50,7 +50,7 @@ function downloadFileToCache(url, filename) {
         responseType     : 'arraybuffer',
         responseEncoding : 'binary',
     }).then(function(response) {
-        fs.appendFileSync('public/cache/' + filename, response.data);
+        fs.appendFileSync('storage/cache/' + filename, response.data);
         return { 
             filename : filename,
             success  : true
@@ -60,6 +60,101 @@ function downloadFileToCache(url, filename) {
         console.log(error);
         return { success : false };
     });
+
+}
+function downloadFileToServer(rootFolder, subFolder, itemFolder, itemTitle, attachment, fileName, clearExistingFolder, indexFile) {
+
+    if(typeof subFolder === 'undefined') subFolder = '';
+
+    if(subFolder           !== ''  ) subFolder += '/';
+    if(fileName            === null) fileName = attachment.resourceName + attachment.type.extension;
+    if(clearExistingFolder === null) clearExistingFolder = false;
+
+    let rootPath  = 'storage/' + rootFolder;
+    let indexPath = rootPath + '/' + subFolder + 'list.txt';
+    let itemPath  = rootPath + '/' + subFolder;
+
+    if(itemFolder !== null) {
+        if(itemFolder !== '') {
+            itemPath += itemFolder;
+        }
+    }
+
+    createServerFolderPath(itemPath, clearExistingFolder);
+
+    return axios.get(attachment.url, {
+        responseType     : 'arraybuffer',
+        responseEncoding : 'binary',
+    }).then(function(response) {
+        fs.appendFileSync(itemPath + '/' + fileName, response.data);
+
+        if(indexFile) {
+            let fileLink = attachment.selfLink.split('/');
+            
+            let fileData = fileLink[4] + ';' + fileLink[6] + ';' + itemTitle + ';' 
+                    + fileLink[8] + ';' + attachment.name + ';' + attachment.version + ';'
+                    + attachment.resourceName+ ';' + attachment.type.extension + ';' + attachment.type.fileType + ';'
+                    + attachment.created.user.title + ';' + attachment.created.timeStamp + ';' + attachment.size + ';' + attachment.status.label + ';'
+                    + itemPath + '/' + fileName;
+            
+            if(!fs.existsSync(indexPath)) {
+                let fileHeader = 'Workspace ID;DMS ID;Descriptor;'
+                    + 'Attachment ID;Attachment Filename;Attachment Version;'
+                    + 'Attachment Name;Attachment Extension;Attachment Type;'
+                    + 'Created By;Creation Timestamp;Attachment Size;Attachment Status'
+                    + 'Full Path';
+                fs.appendFileSync(indexPath, fileHeader + '\r\n');
+            }
+
+            fs.appendFileSync(indexPath, fileData + '\r\n');
+        }
+
+        return { 
+            fileName : fileName,
+            success  : true
+        };
+    }).catch(function(error) {
+        console.log('error');
+        console.log(error);
+        return { success : false };
+    });
+
+}
+function createServerFolderPath(path, clearExistingFolder) {
+
+    if(path === null) return;
+    if(path === ''  ) return;
+    
+    if(clearExistingFolder) {
+        if(fs.existsSync(path)) {
+            fs.rmSync(path, { recursive: true, force: true });
+        }
+    }
+
+    let folders    = path.split('/');
+    let folderPath = '';
+
+    for(let folder of folders) {
+        
+        folderPath = folderPath + folder;
+
+        if(!fs.existsSync(folderPath)) {
+            fs.mkdirSync(folderPath);
+        }
+
+        folderPath += '/';
+
+    }
+
+}
+function deleteServerFolderPath(path) {
+
+    if(path === null) return;
+    if(path === ''  ) return;
+    
+    if(fs.existsSync(path)) {
+        fs.rmSync(path, { recursive: true, force: true });
+    }
 
 }
 function sortArray(array, key, type) {
@@ -996,20 +1091,207 @@ router.post('/set-owner', function(req, res, next) {
     let url    = req.app.locals.tenantLink + link + '/owners';
     let notify = req.body.notify || false;
 
-    axios.put(url, [{
-        notify    : notify,
-        ownerType : 'PRIMARY',
-        __self__  : link + '/owners/' + req.body.owner
-    }],{
+    axios.get(url,{
         headers : req.session.headers
     }).then(function(response) {
-        sendResponse(req, res, response, false);
+
+        let owners     = response.data.owners;
+        
+        owners[0] = {
+            notify    : notify,
+            ownerType : 'PRIMARY',
+            __self__  : link + '/owners/' + req.body.owner
+        };
+
+        axios.put(url, owners,{
+            headers : req.session.headers
+        }).then(function(response) {
+            sendResponse(req, res, response, false);
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true);
+        });
+
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
     
 });
 
+
+/* ----- ADD ADDITIONAL OWNER ----- */
+router.post('/add-owner', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /add-owner');
+    console.log(' --------------------------------------------');
+    console.log('  req.body.wsId   = ' + req.body.wsId);
+    console.log('  req.body.dmsId  = ' + req.body.dmsId);
+    console.log('  req.body.link   = ' + req.body.link);
+    console.log('  req.body.user   = ' + req.body.user);
+    console.log('  req.body.group  = ' + req.body.group);
+    console.log(' ');
+        
+    let userId  = (typeof req.body.user  !== 'undefined') ? req.body.user : '';
+    let groupId = (typeof req.body.group !== 'undefined') ? req.body.group.split('/').pop() : '';
+    let link    = (typeof req.body.link  !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
+    let url     = req.app.locals.tenantLink + link + '/owners';
+
+    axios.get(url,{
+        headers : req.session.headers
+    }).then(function(response) {
+
+        let owners     = response.data.owners;
+        let isNewUser  = (userId  !== '');
+        let isNewGroup = (groupId !== '');
+
+        for(let owner of owners) {
+            if(userId !== '') {
+                if(owner.ownerType === 'ADDITIONAL_USER') {
+                    if(owner.detailsLink.split('/').pop() === userId) isNewUser = false;
+                }
+            }
+            if(groupId !== '') {
+                if(owner.ownerType === 'ADDITIONAL_GROUP') {
+                    if(owner.detailsLink === req.body.group) isNewGroup = false;
+                }
+            }
+        }
+
+        if(isNewUser) {
+            owners.push({
+                ownerType : 'ADDITIONAL_USER',
+                __self__  : link + '/owners/' + userId
+            });
+        }
+
+        if(isNewGroup) {
+            owners.push({
+                ownerType : 'ADDITIONAL_GROUP',
+                __self__  : link + '/owners/' + groupId
+            });
+        }
+
+        if(isNewUser || isNewGroup) {
+
+            axios.put(url, owners,{
+                headers : req.session.headers
+            }).then(function(response) {
+                sendResponse(req, res, response, false);
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true);
+            });
+
+        } else {
+            sendResponse(req, res, response, false);
+        }
+
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+    
+});
+
+
+/* ----- REMOVE ADDITIONAL OWNER ----- */
+router.post('/remove-owner', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /remove-owner');
+    console.log(' --------------------------------------------');
+    console.log('  req.body.wsId   = ' + req.body.wsId);
+    console.log('  req.body.dmsId  = ' + req.body.dmsId);
+    console.log('  req.body.link   = ' + req.body.link);
+    console.log('  req.body.user   = ' + req.body.user);
+    console.log('  req.body.group  = ' + req.body.group);
+    console.log(' ');
+        
+    let userId  = (typeof req.body.user  !== 'undefined') ? req.body.user : '';
+    let groupId = (typeof req.body.group !== 'undefined') ? req.body.group.split('/').pop() : '';
+    let link    = (typeof req.body.link  !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
+    let url     = req.app.locals.tenantLink + link + '/owners';
+
+    axios.get(url,{
+        headers : req.session.headers
+    }).then(function(response) {
+
+        let owners     = response.data.owners;
+        let newOwners  = [owners[0]];
+
+        for(let owner of owners) {
+            let ownerId = owner.detailsLink.split('/').pop();
+            if(owner.ownerType === 'ADDITIONAL_USER') {
+                if(userId !== ownerId) {
+                    newOwners.push(owner);
+                }
+            } else if(owner.ownerType === 'ADDITIONAL_GROUP') {
+                if(groupId !== ownerId) {
+                    newOwners.push(owner);
+                }
+            }
+        }
+
+        if(owners.length !== newOwners.length) {
+
+            axios.put(url, newOwners,{
+                headers : req.session.headers
+            }).then(function(response) {
+                sendResponse(req, res, response, false);
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true);
+            });
+
+        } else {
+            sendResponse(req, res, response, false);
+        }
+
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+    
+});
+
+
+/* ----- CLEAR ADDITIONAL OWNER ----- */
+router.post('/clear-owners', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /clear-owners');
+    console.log(' --------------------------------------------');
+    console.log('  req.body.wsId   = ' + req.body.wsId);
+    console.log('  req.body.dmsId  = ' + req.body.dmsId);
+    console.log('  req.body.link   = ' + req.body.link);
+    console.log(' ');
+        
+    let link    = (typeof req.body.link  !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
+    let url     = req.app.locals.tenantLink + link + '/owners';
+
+    axios.get(url,{
+        headers : req.session.headers
+    }).then(function(response) {
+
+        let owners = response.data.owners;
+
+        if(owners.length > 1) {
+
+            owners.splice(1);
+
+            axios.put(url, owners,{
+                headers : req.session.headers
+            }).then(function(response) {
+                sendResponse(req, res, response, false);
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true);
+            });
+
+        } else {
+            sendResponse(req, res, response, false);
+        }
+
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+    
+});
 
 
 /* ----- ITEM DETAILS ----- */
@@ -1143,11 +1425,11 @@ router.get('/image-cache', function(req, res) {
     let url      = req.app.locals.tenantLink + imageLink;
     let fileName = wsId + '-' + dmsId + '-' + fieldId + '-' + imageId + '.jpg';
 
-    fs.stat('public/cache/' + fileName, function(err, stat) {
+    fs.stat('storage/cache/' + fileName, function(err, stat) {
 
         if(err === null) {
             
-            sendResponse(req, res, { 'data' : { 'url' : 'cache/' + fileName } }, false);
+            sendResponse(req, res, { data : { url : '/storage/cache/' + fileName } }, false);
 
         } else if(err.code == 'ENOENT') {
 
@@ -1159,8 +1441,8 @@ router.get('/image-cache', function(req, res) {
                     'Accept'        : 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
                 }
             }).then(function (response) {
-                fs.appendFileSync('public/cache/' + fileName, response.data);
-                sendResponse(req, res, { 'data' : { 'url' : 'cache/' + fileName }  }, false);
+                fs.appendFileSync('storage/cache/' + fileName, response.data);
+                sendResponse(req, res, { data : { url : '/storage/cache/' + fileName }  }, false);
             }).catch(function (error) {
                 sendResponse(req, res, error.response, true);   
             });
@@ -1223,27 +1505,27 @@ router.get('/grid', function(req, res, next) {
 
 
 /* ----- ADD GRID ROW ----- */
-router.get('/add-grid-row', function(req, res, next) {
+router.post('/add-grid-row', function(req, res, next) {
     
     console.log(' ');
     console.log('  /add-grid-row');
     console.log(' --------------------------------------------'); 
-    console.log('  req.query.wsId    = ' + req.query.wsId);
-    console.log('  req.query.dmsId   = ' + req.query.dmsId);
-    console.log('  req.query.link    = ' + req.query.link);
-    console.log('  req.query.data    = ' + req.query.data);
+    console.log('  req.body.wsId    = ' + req.body.wsId);
+    console.log('  req.body.dmsId   = ' + req.body.dmsId);
+    console.log('  req.body.link    = ' + req.body.link);
+    console.log('  req.body.data    = ' + req.body.data);
     console.log(); 
     
-    let wsId = (typeof req.query.wsId !== 'undefined') ? req.query.wsId : req.query.link.split('/')[4];
+    let wsId = (typeof req.body.wsId !== 'undefined') ? req.body.wsId : req.body.link.split('/')[4];
 
-    let url =  (typeof req.query.link !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
+    let url =  (typeof req.body.link !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
         url  = req.app.locals.tenantLink + url;
         url += '/views/13/rows';
 
     console.log("LW url " + url); 
     let rowData = [];
 
-    for(let field of req.query.data) {
+    for(let field of req.body.data) {
         rowData.push({
             '__self__' : '/api/v3/workspaces/' + wsId + '/views/13/fields/' + field.fieldId,
             'value' : field.value
@@ -1752,24 +2034,24 @@ router.get('/add-managed-items', function(req, res, next) {
 
 
 /* ----- UPDATE MANAGED ITEM COLUMNS ----- */
-router.get('/update-managed-item', function(req, res, next) {
+router.post('/update-managed-item', function(req, res, next) {
     
     console.log(' ');
     console.log('  /update-managed-item');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.link       = ' + req.query.link);
-    console.log('  req.query.fields     = ' + req.query.fields);
-    console.log('  req.query.transition = ' + req.query.transition);
+    console.log('  req.body.link       = ' + req.body.link);
+    console.log('  req.body.fields     = ' + req.body.fields);
+    console.log('  req.body.transition = ' + req.body.transition);
 
-    let url = req.app.locals.tenantLink + req.query.link;
+    let url = req.app.locals.tenantLink + req.body.link;
     
     let params = {
-        'linkedFields' : req.query.fields
+        'linkedFields' : req.body.fields
     }
 
-    if(typeof req.query.transition !== undefined) {
-        if(req.query.transition !== '') {
-            params.targetTransition = { 'link' : req.query.transition }
+    if(typeof req.body.transition !== undefined) {
+        if(req.body.transition !== '') {
+            params.targetTransition = { 'link' : req.body.transition }
         }
     }
 
@@ -1879,6 +2161,35 @@ router.get('/attachments', function(req, res, next) {
 });
 
 
+/* ----- RELATED ATTACHMENT ----- */
+router.get('/related-attachments', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /related-attachments');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.wsId  = ' + req.query.wsId);
+    console.log('  req.query.dmsId = ' + req.query.dmsId);
+    console.log('  req.query.link  = ' + req.query.link);
+    console.log();
+
+    let url =  (typeof req.query.link !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
+        url = req.app.locals.tenantLink + url + '/related-attachments?asc=name';
+    
+    // let headers = getCustomHeaders(req);
+    //     headers.Accept = 'application/vnd.autodesk.plm.attachments.bulk+json';
+
+    axios.get(url, {
+        headers : req.session.headers
+    }).then(function(response) {
+        response.data = (response.data === '') ? [] : response.data;
+        sendResponse(req, res, response, false);
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+    
+});
+
+
 /* ----- ATTACHMENT DOWNLOAD ----- */
 router.get('/download', function(req, res, next) {
    
@@ -1907,6 +2218,107 @@ router.get('/download', function(req, res, next) {
     }).then(function (response) {
         sendResponse(req, res, response, false);
     }).catch(function (error) {
+        sendResponse(req, res, error.response, true);
+    });
+
+});
+
+
+/* ----- EXPORT ATTACHMENTS ----- */
+router.post('/export-attachments', function(req, res, next) {
+   
+    console.log(' ');
+    console.log('  /export-attachments');
+    console.log(' --------------------------------------------');  
+    console.log('  req.body.wsId         = ' + req.body.wsId);
+    console.log('  req.body.dmsId        = ' + req.body.dmsId);
+    console.log('  req.body.link         = ' + req.body.link);
+    console.log('  req.body.rootFolder   = ' + req.body.rootFolder);
+    console.log('  req.body.folder       = ' + req.body.folder);
+    console.log('  req.body.clearFolder  = ' + req.body.clearFolder);
+    console.log('  req.body.includeDMSID = ' + req.body.includeDMSID);
+    console.log('  req.body.filenamesIn  = ' + req.body.filenamesIn);
+    console.log('  req.body.filenamesEx  = ' + req.body.filenamesEx);
+    console.log('  req.body.indexFile    = ' + req.body.indexFile);
+    console.log();
+
+    let url =  (typeof req.body.link !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
+        url = req.app.locals.tenantLink + url + '/attachments?asc=name';
+
+    let rootFolder   = req.body.rootFolder || 'exports';
+    let subFolder    = req.body.folder || '';
+    let includeDMSID = req.body.includeDMSID || 'no';
+    let dmsID        = req.body.dmsId || req.body.link.split('/').pop();
+    let filenamesIn  = (typeof req.body.filenamesIn === 'undefined') ? '' : req.body.filenamesIn;
+    let filenamesEx  = (typeof req.body.filenamesEx === 'undefined') ? '' : req.body.filenamesEx;
+    let clearFolder  = false;
+    let indexFile    = true;
+
+    if(typeof req.body.clearFolder !== 'undefined') clearFolder = (req.body.clearFolder.toLowerCase() === 'true');
+    if(typeof req.body.indexFile   !== 'undefined') indexFile   = (  req.body.indexFile.toLowerCase() === 'true');
+
+    filenamesIn = filenamesIn || '';
+    filenamesEx = filenamesEx || '';
+
+    let headers = getCustomHeaders(req);
+        headers.Accept = 'application/vnd.autodesk.plm.attachments.bulk+json';
+
+
+    if(subFolder !== '') {
+        if(clearFolder) {
+            createServerFolderPath('storage/' + rootFolder + '/' + subFolder, true);
+        }
+    }
+
+    axios.get(url, {
+        headers : headers
+    }).then(function(response) {
+
+        let success   = true;
+        let data      = [];
+        
+        if(response.status === 200) {
+
+            let requests    = [];
+            let attachments = (response.data === '') ? [] : response.data.attachments;
+            
+            for(let attachment of attachments) {
+
+                let fileName  = attachment.resourceName + attachment.type.extension;
+                let itemTitle = response.data.item.title;
+
+                if((filenamesIn === '') || (fileName.indexOf(filenamesIn) >= 0)) {
+                    if((filenamesEx === '') || (fileName.indexOf(filenamesEx) < 0)) {
+
+                        let itemFolder = response.data.item.title;
+
+                             if(includeDMSID === 'prefix') itemFolder  = '[' + dmsID + '] ' + response.data.item.title;
+                        else if(includeDMSID === 'suffix') itemFolder += ' [' + dmsID + ']';
+
+                        requests.push(downloadFileToServer(rootFolder, subFolder, itemFolder, itemTitle, attachment, null, true, indexFile));
+
+                    }
+                }
+
+            }
+
+            Promise.all(requests).then(function(responses) {
+        
+                for(let response of responses) {
+                    if(!response.success) success = false;
+                    data.push(response.fileName);
+                }
+        
+                sendResponse(req, res, { data : data }, !success);
+
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true,);
+            });
+
+        } else sendResponse(req, res, { data : data }, false);
+
+        // sendResponse(req, res, { 'data' : result, 'status' : response.status }, false);
+    }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
 
@@ -2411,7 +2823,7 @@ function getViewables(req, res, headers, link, viewables, attempt) {
                 }
 
             } else {
-                viewable.link = '/cache/' + viewable.filename;
+                viewable.link = '/storage/cache/' + viewable.filename;
             }
 
         }
@@ -2673,53 +3085,53 @@ router.get('/bom-edge', function(req, res, next) {
 
 
 /* ----- ADD BOM ITEM ----- */
-router.get('/bom-add', function(req, res, next) {
+router.post('/bom-add', function(req, res, next) {
     
     console.log(' ');
     console.log('  /bom-add');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsIdParent  = ' + req.query.wsIdParent);
-    console.log('  req.query.wsIdChild   = ' + req.query.wsIdChild);
-    console.log('  req.query.dmsIdParent = ' + req.query.dmsIdParent);
-    console.log('  req.query.dmsIdChild  = ' + req.query.dmsIdChild);
-    console.log('  req.query.linkParent  = ' + req.query.linkParent);
-    console.log('  req.query.linkChild   = ' + req.query.linkChild);
-    console.log('  req.query.quantity    = ' + req.query.quantity);
-    console.log('  req.query.pinned      = ' + req.query.pinned);
-    console.log('  req.query.number      = ' + req.query.number);
-    console.log('  req.query.fields      = ' + req.query.fields);
+    console.log('  req.body.wsIdParent  = ' + req.body.wsIdParent);
+    console.log('  req.body.wsIdChild   = ' + req.body.wsIdChild);
+    console.log('  req.body.dmsIdParent = ' + req.body.dmsIdParent);
+    console.log('  req.body.dmsIdChild  = ' + req.body.dmsIdChild);
+    console.log('  req.body.linkParent  = ' + req.body.linkParent);
+    console.log('  req.body.linkChild   = ' + req.body.linkChild);
+    console.log('  req.body.quantity    = ' + req.body.quantity);
+    console.log('  req.body.pinned      = ' + req.body.pinned);
+    console.log('  req.body.number      = ' + req.body.number);
+    console.log('  req.body.fields      = ' + req.body.fields);
     console.log();
     
-    let linkParent = (typeof req.query.linkParent !== 'undefined') ? req.query.linkParent : '/api/v3/workspaces/' + req.query.wsIdParent + '/items/' + req.query.dmsIdParent;
-    let linkChild  = (typeof  req.query.linkChild !== 'undefined') ? req.query.linkChild  : '/api/v3/workspaces/' + req.query.wsIdChild  + '/items/' + req.query.dmsIdChild;
-    let quantity   = (typeof   req.query.quantity === 'undefined') ? 1 : req.query.quantity;
-    let isPinned   = (typeof     req.query.pinned === 'undefined') ? false : req.query.pinned;
+    let linkParent = (typeof req.body.linkParent !== 'undefined') ? req.body.linkParent : '/api/v3/workspaces/' + req.body.wsIdParent + '/items/' + req.body.dmsIdParent;
+    let linkChild  = (typeof req.body.linkChild  !== 'undefined') ? req.body.linkChild  : '/api/v3/workspaces/' + req.body.wsIdChild  + '/items/' + req.body.dmsIdChild;
+    let isPinned   = (typeof req.body.pinned     === 'undefined') ? false : (req.body.pinned.toLowerCase() == 'true');
+    let quantity   = (typeof req.body.quantity   === 'undefined') ? 1 : req.body.quantity;
     
     let url = req.app.locals.tenantLink + linkParent + '/bom-items';
     
     let params = {
-        'quantity'  : quantity,
-        'isPinned'  : isPinned,
-        'item'      : { 
-            'link'  : linkChild
+        quantity  : parseFloat(quantity),
+        isPinned  : isPinned,
+        item      : { 
+            link  : linkChild
         }
     };
 
-    if(typeof req.query.number !== 'undefined') params.itemNumber = req.query.number;
+    if(typeof req.body.number !== 'undefined') params.itemNumber = Number(req.body.number);
 
-    if(typeof req.query.fields !== 'undefined') {
+    if(typeof req.body.fields !== 'undefined') {
 
-        if(req.query.fields.length > 0) {
+        if(req.body.fields.length > 0) {
 
             params.fields = [];
 
-            for(field of req.query.fields) {
+            for(field of req.body.fields) {
 
                 params.fields.push({
-                    'metaData' : {
-                        'link' : field.link
+                    metaData : {
+                        link : field.link
                     },
-                    'value' : field.value
+                    value : field.value
                 });
 
             }
@@ -2730,7 +3142,7 @@ router.get('/bom-add', function(req, res, next) {
     axios.post(url, params, {
         headers : req.session.headers
     }).then(function(response) {
-        sendResponse(req, res, { 'data' : response.headers.location, 'status' : response.status }, false);
+        sendResponse(req, res, { data : response.headers.location, status : response.status }, false);
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
@@ -2739,50 +3151,54 @@ router.get('/bom-add', function(req, res, next) {
 
 
 /* ----- UPDATE BOM ITEM ----- */
-router.get('/bom-update', function(req, res, next) {
+router.post('/bom-update', function(req, res, next) {
     
     console.log(' ');
     console.log('  /bom-update');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsIdParent  = ' + req.query.wsIdParent);
-    console.log('  req.query.wsIdChild   = ' + req.query.wsIdChild);
-    console.log('  req.query.dmsIdParent = ' + req.query.dmsIdParent);
-    console.log('  req.query.dmsIdChild  = ' + req.query.dmsIdChild);
-    console.log('  req.query.edgeId      = ' + req.query.edgeId);
-    console.log('  req.query.qty         = ' + req.query.qty);
-    console.log('  req.query.pinned      = ' + req.query.pinned);
-    console.log('  req.query.number      = ' + req.query.number);
-    console.log('  req.query.fields      = ' + req.query.fields);
+    console.log('  req.body.wsIdParent  = ' + req.body.wsIdParent);
+    console.log('  req.body.wsIdChild   = ' + req.body.wsIdChild);
+    console.log('  req.body.dmsIdParent = ' + req.body.dmsIdParent);
+    console.log('  req.body.dmsIdChild  = ' + req.body.dmsIdChild);
+    console.log('  req.body.linkParent  = ' + req.body.linkParent);
+    console.log('  req.body.linkChild   = ' + req.body.linkChild);
+    console.log('  req.body.edgeId      = ' + req.body.edgeId);
+    console.log('  req.body.quantity    = ' + req.body.quantity);
+    console.log('  req.body.pinned      = ' + req.body.pinned);
+    console.log('  req.body.number      = ' + req.body.number);
+    console.log('  req.body.fields      = ' + req.body.fields);
     console.log();
 
-    let url = req.app.locals.tenantLink + '/api/v3/workspaces/' + req.query.wsIdParent + '/items/' + req.query.dmsIdParent + '/bom-items/' + req.query.edgeId;
-
-    let isPinned = (typeof req.query.pinned === 'undefined') ? false : req.query.pinned;
-
+    let linkParent = (typeof req.body.linkParent !== 'undefined') ? req.body.linkParent : '/api/v3/workspaces/' + req.body.wsIdParent + '/items/' + req.body.dmsIdParent;
+    let linkChild  = (typeof req.body.linkChild  !== 'undefined') ? req.body.linkChild  : '/api/v3/workspaces/' + req.body.wsIdChild  + '/items/' + req.body.dmsIdChild;
+    let isPinned   = (typeof req.body.pinned     === 'undefined') ? false : (req.body.pinned.toLowerCase() == 'true');
+    let quantity   = (typeof req.body.quantity   === 'undefined') ? 1 : req.body.quantity;
+    
+    let url = req.app.locals.tenantLink + linkParent + '/bom-items/' + req.body.edgeId;
+    
     let params = {
-        'quantity'  : req.query.qty,
-        'isPinned'  : isPinned,
-        'item'      : { 
-            'link'  : '/api/v3/workspaces/' + req.query.wsIdChild + '/items/' + req.query.dmsIdChild
+        quantity  : parseFloat(quantity),
+        isPinned  : isPinned,
+        item      : { 
+            link  : linkChild
         }
     };
 
-    if(typeof req.query.number !== 'undefined') params.itemNumber = req.query.number;
+    if(typeof req.body.number !== 'undefined') params.itemNumber = Number(req.body.number);
     
-    if(typeof req.query.fields !== 'undefined') {
+    if(typeof req.body.fields !== 'undefined') {
 
-        if(req.query.fields.length > 0) {
+        if(req.body.fields.length > 0) {
 
             params.fields = [];
 
-
-            for(field of req.query.fields) {
+            for(field of req.body.fields) {
 
                 params.fields.push({
-                    'metaData' : {
-                        'link' : field.link
+                    metaData : {
+                        link : field.link
                     },
-                    'value' : field.value
+                    value : field.value
                 });
 
             }
@@ -2793,7 +3209,7 @@ router.get('/bom-update', function(req, res, next) {
     axios.patch(url, params, {
         headers : req.session.headers
     }).then(function(response) {
-        sendResponse(req, res, { 'data' : true, 'status' : response.status }, false);
+        sendResponse(req, res, { data : true, status : response.status }, false);
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
@@ -3094,19 +3510,62 @@ router.get('/workflow-history', function(req, res, next) {
 });
 
 
+/* ----- PERFORM LIFECYCLE TRANSITION ----- */
+router.get('/lifecycle-transition', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /lifecycle-transition');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.wsId       = ' + req.query.wsId);
+    console.log('  req.query.dmsId      = ' + req.query.dmsId);
+    console.log('  req.query.link       = ' + req.query.link);
+    console.log('  req.query.transition = ' + req.query.transition);
+    console.log('  req.query.revision    = ' + req.query.revision);
+    console.log();
+
+    let wsId         = (typeof req.query.wsId !== 'undefined') ? req.query.wsId : req.query.link.split('/')[4];
+    let dmsId        = (typeof req.query.dmsId !== 'undefined') ? req.query.dmsId : req.query.link.split('/')[6];
+    let transitionId = req.query.transition.split('/').pop();
+    let url          = req.app.locals.tenantLink + '/api/rest/v1/workspaces/' + wsId + '/items/' + dmsId + '/lifecycles/transitions/' + transitionId;
+
+    let custHeaders = getCustomHeaders(req);
+        custHeaders['Content-Type'] = 'application/xml';
+
+    let body = '<dmsVersionItem><release>' + req.query.revision + '</release></dmsVersionItem>';
+
+    axios.put(url, body, {
+        headers : custHeaders
+    }).then(function(response) {
+        sendResponse(req, res, response, false);
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+    
+});
+
+
+
 /* ----- MY OUTSTANDING WORK ----- */
 router.get('/mow', function(req, res, next) {
     
     console.log(' ');
     console.log('  /mow');
-    console.log(' --------------------------------------------');  
+    console.log(' --------------------------------------------'); 
+    console.log('  req.query.userId       = ' + req.query.userId);     
     console.log('  ');
-    
-    let url = req.app.locals.tenantLink + '/api/v3/users/@me/outstanding-work';
-    
+
+    let url      = req.app.locals.tenantLink + '/api/v3/users/@me/outstanding-work';
+    let headers  = getCustomHeaders(req);
+
+    if(req.query.userId !== '') {
+        headers['Authorization'] = req.session.admin;
+        headers['X-user-id']     = req.query.userId;
+    }
+
     axios.get(url, {
-        headers : req.session.headers
+        headers : headers
     }).then(function(response) {
+        if(response.data === '') response.data = { outstandingWork : [] };
         sendResponse(req, res, response, false);
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
@@ -3253,40 +3712,40 @@ router.get('/items', function(req, res) {
 
 
 /* ----- SEARCH ----- */
-router.get('/search', function(req, res) {
-   
+router.post('/search', function(req, res) {
+
     console.log(' ');
     console.log('  /search');
     console.log(' --------------------------------------------');
-    console.log('  req.query.wsId        = ' + req.query.wsId);
-    console.log('  req.query.link        = ' + req.query.link);
-    console.log('  req.query.latest      = ' + req.query.latest);
-    console.log('  req.query.sort        = ' + req.query.sort);
-    console.log('  req.query.fields      = ' + req.query.fields);
-    console.log('  req.query.filter      = ' + req.query.filter);
-    console.log('  req.query.pageNo      = ' + req.query.pageNo);
-    console.log('  req.query.pageSize    = ' + req.query.pageSize);
-    console.log('  req.query.logicClause = ' + req.query.logicClause);
+    console.log('  req.body.wsId        = ' + req.body.wsId);
+    console.log('  req.body.link        = ' + req.body.link);
+    console.log('  req.body.latest      = ' + req.body.latest);
+    console.log('  req.body.sort        = ' + req.body.sort);
+    console.log('  req.body.fields      = ' + req.body.fields);
+    console.log('  req.body.filter      = ' + req.body.filter);
+    console.log('  req.body.pageNo      = ' + req.body.pageNo);
+    console.log('  req.body.pageSize    = ' + req.body.pageSize);
+    console.log('  req.body.logicClause = ' + req.body.logicClause);
     console.log();
 
-    let wsId = (typeof req.query.wsId === 'undefined') ? req.query.link.split('/')[4] : req.query.wsId;
+    let wsId = (typeof req.body.wsId === 'undefined') ? req.body.link.split('/')[4] : req.body.wsId;
     let url  = req.app.locals.tenantLink + '/api/rest/v1/workspaces/' + wsId + '/items/search';
    
     let params = {
-       pageNo        : req.query.pageNo || 1,
-       pageSize      : Number(req.query.pageSize) || 100,
-       logicClause   : req.query.logicClause || 'AND',
+       pageNo        : req.body.pageNo || 1,
+       pageSize      : Number(req.body.pageSize) || 100,
+       logicClause   : req.body.logicClause || 'AND',
        fields        : [],
        filter        : [],
        sort          : []
     };
 
-    setBodyFields(params, req.query.fields);
-    setBodySort(params, req.query.sort);
-    setBodyFilter(params, req.query.filter || []);
+    setBodyFields(params, req.body.fields      );
+    setBodySort(params  , req.body.sort        );
+    setBodyFilter(params, req.body.filter || []);
 
-    if(typeof req.query.latest !== 'undefined') {
-        if(req.query.latest) {
+    if(typeof req.body.latest !== 'undefined') {
+        if(req.body.latest) {
             params.filter.push({ 
                 fieldID       : 'LC_RELEASE_LETTER',
                 fieldTypeID   : '10',
@@ -3307,6 +3766,7 @@ router.get('/search', function(req, res) {
         }
         sendResponse(req, res, { 'data' : result, 'status' : response.status }, false);
     }).catch(function (error) {
+        error.response.data = { row : [] };
         sendResponse(req, res, error.response, true);
     });
    
@@ -3399,10 +3859,10 @@ function setBodyFilter(body, filters) {
             console.log();
         } else {
             body.filter.push({
-                'fieldID'       : filter.field,
-                'fieldTypeID'   : filter.type,
-                'filterType'    : { 'filterID' : filter.comparator },
-                'filterValue'   : filter.value         
+                fieldID       : filter.field,
+                fieldTypeID   : filter.type,
+                filterType    : { filterID : filter.comparator },
+                filterValue   : filter.value         
             });
         }
         
@@ -4071,7 +4531,7 @@ router.get('/users', function(req, res, next) {
     console.log();
 
     let bulk       = (typeof req.query.bulk       === 'undefined') ?    true : req.query.bulk;
-    let limit      = (typeof req.query.limit      === 'undefined') ?     100 : req.query.limit;
+    let limit      = (typeof req.query.limit      === 'undefined') ?    1000 : req.query.limit;
     let offset     = (typeof req.query.offset     === 'undefined') ?       0 : req.query.offset;
     let activeOnly = (typeof req.query.activeOnly === 'undefined') ? 'false' : req.query.activeOnly;
     let mappedOnly = (typeof req.query.mappedOnly === 'undefined') ? 'false' : req.query.mappedOnly;
@@ -4564,6 +5024,35 @@ router.get('/workspace-workflow-transitions', function(req, res, next) {
         headers : req.session.headers
     }).then(function(response) {
         console.log(response.data);
+        if(response.data === "") response.data = [];
+        sendResponse(req, res, response, false);
+    }).catch(function(error) {
+        sendResponse(req, res, error.response, true);
+    });
+
+});
+
+
+/* ----- GET WORKSPACE LIFECYCLE TRANSITIONS ----- */
+router.get('/workspace-lifecycle-transitions', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /workspace-lifecycle-transitions');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.wsId   = ' + req.query.wsId);
+    console.log('  req.query.link   = ' + req.query.link);
+    console.log('  req.query.tenant = ' + req.query.tenant);
+    console.log();
+
+    let wsId    = (typeof req.query.wsId === 'undefined') ? req.query.link.split('/')[4] : req.query.wsId;
+    let url     = getTenantLink(req) + '/api/v3/workspaces/' + wsId + '/transitions';
+    let headers = getCustomHeaders(req);
+
+    headers.Accept = 'application/vnd.autodesk.plm.transitions.bulk+json';
+
+    axios.get(url, {
+        headers : headers
+    }).then(function(response) {
         if(response.data === "") response.data = [];
         sendResponse(req, res, response, false);
     }).catch(function(error) {

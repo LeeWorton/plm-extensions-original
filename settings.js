@@ -17,14 +17,14 @@ let enableCache     = false;
 // ---------------------------------------------------------------------------------------------------------------------------
 //  OPTIONAL ADDITIONAL CLIENT ID FOR 2-LEGGED AUTHENTICATION
 // ---------------------------------------------------------------------------------------------------------------------------
-// The application USER SETTINGS MANAGER requires an APS application with Client ID and Client Secret for 2-legged authentications, please proivde the given settings in the next variables.
-// This application must be different from the one provided in clientId as this time, a Client Secret is required whereas the previous application must not require a Client Secret.
-// Only 2-legged applications enables impersonation - which is required for the USER SETTINGS MANAGER utility to work. 
-// However, as this impacts security, its is recommended to provide the following settings only if the USER SETTINGS MANAGER will be used, maybe even only temporarily or in a local copy of this server.
+// The applications OUTSTANDING WORK REPORT and  USER SETTINGS MANAGER require an APS application with Client ID and Client Secret for 2-legged authentications, please proivde the given settings in the next variables.
+// This APS application must be different from the one provided in clientId above as this one must require a Client Secret, to be provided ad adminClientSecret.
+// Only 2-legged applications enable impersonation - which is required for the two advanced admin applications (OUTSTANDING WORK REPORT and USER SETTINGS MANAGER). 
+// However, as this impacts security, its is recommended to provide the following settings only if these advanced admin utilities will be used, maybe even only temporarily or in a local copy of this server.
 // All other applications will work even if the following 2 settings are not provided as they use the clientId variable instead. 
 // Note that you can also provide these settings using the given environment variables ADMIN_CLIENT_ID and ADMIN_CLIENT_SECRET.
-let adminClientId     = '***********************';
-let adminClientSecret = '***********************';
+let adminClientId     = '';
+let adminClientSecret = '';
 
 
 
@@ -238,6 +238,7 @@ exports.config = {
         bomViewName          : 'Details',
         fieldIdPRImage       : 'IMAGE_1',
         fieldIdPRContext     : 'AFFECTED_ITEM',
+        rollUpFields         : [],
         wsIdSupplierPackages : 147,
         kpis : [
             // ------------------------------------------------------------------------------------------------------------------
@@ -564,6 +565,44 @@ exports.config = {
         }
     },
 
+    sbom : {
+        fieldIdSBOM          : 'SERVICE_BOM',
+        fieldIdEBOM          : 'ENGINEERING_BOM',
+        bomViewName          : 'Service',
+        fieldIdItemType      : 'TYPE',
+        picklistItemTypes    : 'CUSTOM_LOOKUP_ITEM_TYPES',
+        typeServiceBOM       : 'Service BOM',
+        typeServiceOffering  : 'Service Offering',
+        typeServiceOperation : 'Service Operation',
+        typeServiceKit       : 'Service Kit',
+        fieldIdSparePart     : 'SPARE_WEAR_PART',
+        valuesSparePart      : ['spare', 'spare part', 'yes', 'x', 'y', 'true'],
+        basePosNumbers       : [ 101, 201, 301 ],
+        viewerFeatures : {
+            contextMenu   : false,
+            cube          : false,
+            orbit         : false,
+            firstPerson   : false,
+            camera        : false,
+            measure       : true,
+            section       : true,
+            explodedView  : true,
+            modelBrowser  : false,
+            properties    : false,
+            settings      : false,
+            fullscreen    : true,
+            markup        : false,
+            hide          : true,
+            ghosting      : true,
+            highlight     : true,
+            single        : true,
+            fitToView     : true,
+            reset         : true,
+            views         : true,
+            selectFile    : false
+        }
+    },
+
     service : {
         applicationFeatures : {
             homeButton            : true,
@@ -583,6 +622,7 @@ exports.config = {
         productsFieldIdTitle   : 'TITLE',
         productsFieldIdSubtitle: 'DESCRIPTION',
         productsFieldIdBOM     : 'ENGINEERING_BOM',
+        revisionBias           : 'release',
         viewerFeatures : {
             contextMenu   : false,
             cube          : false,
@@ -619,20 +659,22 @@ exports.config = {
 
         wsIdProblemReports     : 82,
         wsIdSparePartsRequests : 241,
-        requestSectionsExcluded: [ 'Real Time KPIs', 'Workflow Activity' ],
+        requestSectionsExcluded: [ 'Planning & Tracking', 'Request Confirmation', 'Quote Submission & Response', 'Real Time KPIs', 'Workflow Activity', 'Quote Summary', 'Order Processing', 'Related Processes' ],
+        requestSectionsExpanded: [ 'Requestor Contact Details', 'Request Details' ],
         requestColumnsExcluded : [ 'Line Item Cost', 'Availability [%]', 'Manufacturer', 'Manufacturer P/N', 'Unit Cost', 'Total Cost', 'Make or Buy', 'Lead Time (w)', 'Long Lead Time'],
 
 
     },
 
     variants : {
-        wsIdItemVariants       : 274,
-        variantsSectionLabel   : 'Variant Definition',
-        fieldIdVariantBaseItem : 'DMS_ID_BASE_ITEM',
-        fieldIdItemNumber      : 'NUMBER',
-        fieldIdItemVariants    : 'VARIANTS',
-        bomViewNameItems       : 'Variant Management',
-        bomViewNameVariants    : 'Default View',
+        wsIdItemVariants               : 274,
+        sectionLabelVariantDefinition  : 'Variant Definition',
+        fieldIdBaseItem                : 'BASE_ITEM',
+        fieldIdBaseItemNumber          : 'BASE_ITEM_NUMBER',
+        fieldIdRootItemDmsId           : 'ROOT_ITEM_DMS_ID',
+        bomViewNameItems               : 'Variant Manager',
+        bomViewNameVariants            : 'Variant Manager',
+        maxBOMLevels                   : 4,
         viewerFeatures : {
             contextMenu   : false,
             cube          : false,
@@ -656,9 +698,131 @@ exports.config = {
             views         : true,
             selectFile    : true
         }
+    },
+
+    addins : {
+
+        item : {
+            expandSections : [ 'Basic', 'Technical Details' ],
+            sectionsEx     : [ 'Others' ],
+            fieldsEx       : [ 'ACTIONS' ]
+        },
+
+        projects : {
+
+            workspaceId                  : 213,
+            stateCompleted               : 'Completed',
+            headerLabelProjects          : 'Engineering Projects',
+            fieldIdBOM                   : 'DELIVERABLE_4',
+            tabNameBOM                   : 'BOM',
+            tabNameDetails               : 'Details',
+            projectDetailsSectionsEx     : [ 'Project Schedule', 'Closure' ],
+            projectDetailsExpandSections : [ 'Task Details', 'Header', 'Details' ]
+
+        },
+
+        tasks : {
+
+            headerLabelTasks    : 'My Work List',
+            columnsExTasks      : [ 'State Set On', 'State Set By', 'State' ],
+            workspacesInTasks   : [ 'Change Tasks', 'Change Requests', 'Change Orders', 'Problem Reports' ],
+            expandSectionsTask  : [ 'Task Details', 'Header', 'Details' ]
+
+        }
+
     }
 
 }
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------------
+//  MAIN MENU CONFIGURATION
+// ---------------------------------------------------------------------------------------------------------------------------
+// Configure the main menu for the main toolbar enabling users to quickly switch the UX utilities
+// Set exports.menu = [] to disable the menu in all utilities
+exports.menu = [
+    [{
+        label : 'Business Applications',
+        commands : [{
+            icon     : 'icon-3d',
+            title    : 'Portal',
+            subtitle : 'Quick access to all product data',
+            url      : '/portal'
+        },{
+            icon     : 'icon-trend-chart',
+            title    : 'Product Data Explorer',
+            subtitle : 'Track design maturity using defined KPIs',
+            url      : '/explorer'
+        },{
+            icon     : 'icon-important',
+            title    : 'Problem Reporting Dashboard',
+            subtitle : 'Capture and resolve problem reports',
+            url      : '/dashboard?wsId=82'
+        },{
+            icon     : 'icon-released',
+            title    : 'Non Conformances Dashboard',
+            subtitle : 'Capture and resolve quality issues',
+            url      : '/dashboard?wsId=98'
+        },{
+            icon     : 'icon-columns',
+            title    : 'Workspace Navigator',
+            subtitle : 'Manage your master data easily',
+            url      : '/navigator'
+        },{
+            icon     : 'icon-tiles',
+            title    : 'Product Portfolio',
+            subtitle : 'Browse your current product portfolio',
+            url      : '/portfolio'
+        },{
+            icon     : 'icon-dashboard',
+            title    : 'Reports Dashboard',
+            subtitle : 'Gain insights using your PLM reports',
+            url      : '/reports'
+        },{
+            icon     : 'icon-timeline',
+            title    : 'Projects Dashboard',
+            subtitle : 'Review timeline of NPI projects in progress',
+            url      : '/projects'
+        },{
+            icon     : 'icon-service',
+            title    : 'Service Portal',
+            subtitle : 'Real time spare parts information',
+            url      : '/service'
+        }]
+    }], [{
+        label : 'Administration Utilities',
+        commands : [{
+            icon     : 'icon-status',
+            title    : 'Data Manager',
+            subtitle : 'Automate data processing tasks',
+            url      : '/data'
+        },{
+            icon     : 'icon-rules',
+            title    : 'Workspace Comparison',
+            subtitle : 'Deploy changes securely with automated comparison',
+            url      : '/workspace-comparison'
+        },{
+            icon     : 'icon-bar-chart-stack',
+            title    : 'Tenant Insights',
+            subtitle : 'Track user activity and data creation in your tenant',
+            url      : '/insights'
+        }]
+    },{
+        label : 'Advanced Administration Utilities',
+        commands : [{
+            icon     : 'icon-problem',
+            title    : 'Outstanding Work Report',
+            subtitle : 'Review &amp update Outstanding Work lists of users',
+            url      : '/outstanding-work'
+        },{
+            icon     : 'icon-group',
+            title    : 'User Settings Manager',
+            subtitle : 'Configure standards for new and existing users',
+            url      : '/users'
+        }]
+    }]
+]
 
 
 

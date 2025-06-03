@@ -10,7 +10,8 @@ function insertMOW(params) {
         layout      : 'table'
     }, [
         [ 'filterByDueDate'  , false ],
-        [ 'filterByWorkspace', false ]
+        [ 'filterByWorkspace', false ],
+        [ 'userId'           , ''    ]
     ]);
 
     settings.mow[id].load = function() { insertMOWData(id); }
@@ -28,7 +29,6 @@ function insertMOW(params) {
 
     insertMOWDone(id);
 
-
     settings.mow[id].load();
 
 }
@@ -36,7 +36,10 @@ function insertMOWData(id) {
 
     settings.mow[id].timestamp = startPanelContentUpdate(id);
 
-    $.get('/plm/mow', { timestamp : settings.mow[id].timestamp }, function(response) {
+    $.get('/plm/mow', { 
+        timestamp : settings.mow[id].timestamp,
+        userId    : settings.mow[id].userId
+     }, function(response) {
 
         if(stopPanelContentUpdate(response, settings.mow[id])) return;
 
@@ -464,7 +467,7 @@ function changeWorkspaceView(id) {
     let linkView    = elemSelect.val();
     let params      = { 
         id              : id + '-content', 
-        header          : false, 
+        hideHeader      : true, 
         openInPLM       : settings.workspaceViews[id].openInPLM,
         onItemClick     : settings.workspaceViews[id].onItemClick,
         onItemDblClick  : settings.workspaceViews[id].onItemDblClick,
@@ -1076,9 +1079,9 @@ function insertResultsData(id) {
     }
 
     let requests = [
-        $.get( '/plm/search', params),
-        $.get( '/plm/fields', params),
-    ]
+        $.post( '/plm/search', params),
+        $.get( '/plm/fields',  { wsId : settings.results[id].wsId} ),
+    ];
 
     Promise.all(requests).then(function(responses) {
 

@@ -250,6 +250,8 @@ function processViewerFeaturesAndData() {
 function onViewerLoadingDone() {}
 function setViewerFeatures() {
 
+    if(viewer.model === null) return;
+
     if (Object.keys(viewerFeatures).length === 0) {
         viewer.toolbar.setVisible(true);
         return;
@@ -619,6 +621,39 @@ function onViewerSelectionChanged(event) {
 }
 function onViewerSelectionChangedDone(partNumbers, event) {}
 
+
+
+
+// Get part number of selected component
+function viewerGetSelectedPartNumber(event, callback) {
+
+    if(event.dbIdArray.length === 1) {
+
+        viewer.getProperties(event.dbIdArray[0], function(data) {
+
+            let partNumber = data.name.split(':')[0];
+            let match      = false;
+
+            for(let partNumberProperty of config.viewer.numberProperties) {
+                if(!match) {
+                    for(let property of data.properties) {
+                        if(property.displayName === partNumberProperty) {
+                            partNumber = property.displayValue;
+                            if(partNumber.indexOf(':') > -1) { partNumber = partNumber.split(':')[0]; }
+                            match = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            callback(partNumber);
+
+        });
+
+    } else return '';
+
+}
 
 
 
