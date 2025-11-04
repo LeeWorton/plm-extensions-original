@@ -106,7 +106,7 @@ exports.config = {
     },
 
     assetEditor : {
-        workspaceId     : 312,
+        workspaceId     : 279,
         landingHeader   : 'Select From Exsiting Assets',
         bomViewName     : 'Basic',
         fieldIdBOM      : 'EBOM',
