@@ -33,6 +33,9 @@ let settings = {
     mow               : {},
     search            : {},
     results           : {},
+    classes           : {},
+    classContents     : {},
+    classFilters      : {},
     viewer            : {},
     workspaceViews    : {},
     workspaceItems    : {},
@@ -413,10 +416,12 @@ function reloadPage(ret) {
 function getURLParameters() {
 
     let result = {
-        link        : '',
-        wsId        : wsId,
-        dmsId       : dmsId,
-        descriptor  : descriptor || ''
+        link       : '',
+        wsId       : wsId,
+        dmsId      : dmsId,
+        descriptor : descriptor || '',
+        number     : number || '',
+        type       : type || ''
     };
 
     if(!isBlank(wsId)) {
@@ -431,6 +436,23 @@ function getURLParameters() {
         let key   = split[0].toLowerCase();
 
         if(key !== '') result[key] = split[1];
+
+    }
+
+    let params = document.location.href.split('?');
+
+    if(params.length > 1) {
+
+        params = params[1].split('&');
+
+        for(let param of params) {
+
+            let split = param.split('=');
+            let key   = split[0].toLowerCase();
+
+            if(key !== 'options') result[key] = split[1];
+
+        }
 
     }
 
@@ -632,7 +654,6 @@ function appendNoDataFound(id, icon, text) {
 }
 
 
-
 // Display Error & Success Message
 function showErrorMessage(title, message) {
 
@@ -684,6 +705,85 @@ function showMessage(type, title, message) {
 function hideMessage() {
 
     $('#message').remove();
+
+}
+
+
+// Display Timeout Error
+function showTimeoutError() {
+
+    let site = document.location.href.split('/');
+
+    if($('#timeout').length > 0) return;
+
+    $('<div></div>').appendTo('body')
+        .attr('id', 'timeout')
+        .addClass(getSurfaceLevel($('body')));
+
+    let elemWrapper = $('<div></div>').appendTo($('#timeout'))
+        .attr('id', 'timeout-wrapper');
+
+    $('<div></div>').appendTo(elemWrapper)
+        .attr('id', 'timeout-icon')
+        .addClass('icon')
+        .addClass('icon-timeout');
+
+     $('<div></div>').appendTo(elemWrapper)
+        .attr('id', 'timeout-title') 
+        .html('Requested Timed Out');
+
+     $('<div></div>').appendTo(elemWrapper)
+        .attr('id', 'timeout-message') 
+        .html('Check your internet connection and validate access to ' + site[0]+'//' + site[2]);
+
+    let elemActions = $('<div></div>').appendTo(elemWrapper)
+        .attr('id', 'timeout-actions');
+
+    $('<div></div>').appendTo(elemActions)
+        .addClass('button')
+        .html('Close Message')
+        .click(function() {
+            $('#timeout').remove();
+        });
+        
+    $('<div></div>').appendTo(elemActions)
+        .addClass('button')
+        .addClass('default')
+        .html('Reload Page')
+        .click(function() {
+            document.location.href = document.location.href;
+        });        
+}
+function hideStartupDialog() {
+
+    $('#startup').remove();
+    $('#startup-logo').remove();
+    $('body').children().removeClass('hidden');
+
+}
+
+
+// Browse responses for errors and print given details to the browser console
+function printResponsesErrorMessagesToConsole(responses) {
+
+    let error = false;
+
+    for(let response of responses) {
+        if(printResponseErrorMessagesToConsole(response)) {
+            error = true;
+        }
+    }
+
+    return error;
+}
+function printResponseErrorMessagesToConsole(response) {
+
+    if(!response.error) return false;
+
+    console.log('!! Error when accessing ' + response.url + '. See request response details below.');
+    console.log(response);
+
+    return true;
 
 }
 
@@ -888,6 +988,7 @@ function setFormEvents() {
            $('.picklist').addClass('hidden');
        }
     });
+
     $(document).click(function(e) { 
 
         let elemClicked        = $(e.target);
@@ -912,7 +1013,6 @@ function setFormEvents() {
     });
 
 }
-
 
 
 // Insert Calendar Controls
@@ -1030,12 +1130,13 @@ function getPanelSettings(link, params, defaults, additional) {
     if(isBlank(defaults.hideHeader)             ) defaults.hideHeader               = false;
     if(isBlank(defaults.hideHeaderControls)     ) defaults.hideHeaderControls       = false;
     if(isBlank(defaults.hideHeaderLabel)        ) defaults.hideHeaderLabel          = false;
+    if(isBlank(defaults.hideButtonLabels)       ) defaults.hideButtonLabels         = false;
     if(isBlank(defaults.headerTopLabel)         ) defaults.headerTopLabel           = '';
     if(isBlank(defaults.headerLabel)            ) defaults.headerLabel              = '';
     if(isBlank(defaults.headerSubLabel)         ) defaults.headerSubLabel           = '';
     if(isBlank(defaults.openInPLM)              ) defaults.openInPLM                = false;
     if(isBlank(defaults.openOnDblClick)         ) defaults.openOnDblClick           = false;
-    if(isBlank(defaults.placeholder)            ) defaults.placeholder              = 'Type to search';
+    if(isBlank(defaults.placeholder)            ) defaults.placeholder              = 'Search';
     if(isBlank(defaults.reload)                 ) defaults.reload                   = false;
     if(isBlank(defaults.reset)                  ) defaults.reset                    = false;
     if(isBlank(defaults.search)                 ) defaults.search                   = false;
@@ -1078,6 +1179,7 @@ function getPanelSettings(link, params, defaults, additional) {
         hideHeader              : isBlank(params.hideHeader)            ? defaults.hideHeader : params.hideHeader,
         hideHeaderControls      : isBlank(params.hideHeaderControls)    ? defaults.hideHeaderControls : params.hideHeaderControls,
         hideHeaderLabel         : isBlank(params.hideHeaderLabel)       ? defaults.hideHeaderLabel : params.hideHeaderLabel,
+        hideButtonLabels        : isBlank(params.hideButtonLabels)      ? defaults.hideButtonLabels : params.hideButtonLabels,
         headerTopLabel          : isBlank(params.headerTopLabel)        ? defaults.headerTopLabel : params.headerTopLabel,
         headerLabel             : isBlank(params.headerLabel)           ? defaults.headerLabel : params.headerLabel,
         headerSubLabel          : isBlank(params.headerSubLabel)        ? defaults.headerSubLabel : params.headerSubLabel,
@@ -1144,6 +1246,8 @@ function getPanelSettings(link, params, defaults, additional) {
     }
 
     if(config.printViewSettings) console.log(settings);
+
+    settings.mode = 'initial';
 
     return settings;
 
@@ -1487,15 +1591,15 @@ function genPanelSelectionControls(id, settings) {
             $('<div></div>').appendTo(elemToolbar)
                 .hide()    
                 .addClass('button')
-                .addClass('with-icon')
-                .addClass('icon-toggle-off')
+                .addClass('with-toggle')
+                .addClass('toggle-off')
                 .addClass('multi-select-action')
                 .html('Selected')
                 .attr('id', id + '-filter-selected-only')
                 .click(function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    $(this).toggleClass('icon-toggle-off').toggleClass('icon-toggle-on').toggleClass('filled');
+                    $(this).toggleClass('toggle-off').toggleClass('toggle-on');
                     filterPanelContent(id);
                 });
 
@@ -2054,10 +2158,50 @@ function genPanelFooterActionButton(id, settings, suffix, params, callback) {
     return elemActionButton;
 
 }
+function genPanelPaginationControls(id, settings) {
+
+    if(isBlank(settings.pagination)) return;
+    if(!settings.pagination) return;
+
+    settings.offset = 0;
+    settings.page   = 1;
+    settings.mode   = 'initial';
+
+    let elemPaginationControls = $('<div></div>', {
+        id : id + '-pagination-controls'
+    }).addClass('panel-pagination-controls').appendTo($('#' + id));
+
+    $('#' + id + '-content').addClass('with-pagination-controls');
+
+    $('<div></div>').appendTo(elemPaginationControls)
+        .addClass('pagination-message')
+        .attr('id', id + '-pagination-message');
+
+    $('<div></div>').appendTo(elemPaginationControls)
+        .addClass('button')
+        .addClass('pagination-next')
+        .addClass('hidden')
+        .attr('id', id + '-pagination-next')
+        .attr('title', 'Load next set of records')
+        .html('Load Next')
+        .click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            panelPaginationLoadNext(settings);
+        });
+
+}
 
 
 // Start & finish update of panel contents to display right contents
-function startPanelContentUpdate(id) {
+function startPanelContentUpdate(id, mode) {
+
+    if(isBlank(mode)) mode = 'initial';
+
+    $('#' + id + '-processing').show();
+    $('#' + id + '-content').hide();
+
+    if(mode !== 'initial') return new Date().getTime();
 
     let elemSearch         = $('#' + id + '-search-input');
     let elemSelects        = $('.' + id + '-filter');
@@ -2096,7 +2240,7 @@ function startPanelContentUpdate(id) {
         })
     }
 
-    if(elemFilterSelected.length > 0) elemFilterSelected.removeClass('icon-toggle-on').addClass('icon-toggle-off').removeClass('filled');
+    if(elemFilterSelected.length > 0) elemFilterSelected.removeClass('toggle-on').addClass('toggle-off');
 
     if(elemFilterEmpty.length > 0) elemFilterEmpty.removeClass('icon-toggle-on').addClass('icon-toggle-off').removeClass('filled');
 
@@ -2109,7 +2253,7 @@ function startPanelContentUpdate(id) {
     $('#' + id + '-actions').children('.panel-action').hide();
     $('#' + id + '-action-create').show().addClass('disabled');
     $('#' + id + '-content').html('').hide();
-    $('#' + id + '-processing').show();
+    
     $('#' + id + '-no-data').hide();    
 
     return new Date().getTime();
@@ -2311,6 +2455,25 @@ function setPanelContentActions(id, settings, responses) {
     });
 
 }
+function setPanelPaginationControls(id, settings, total) {
+
+    if(!settings.pagination) return;
+
+    let elemContent           = $('#' + id + '-content');
+    let elemPaginationNext    = $('#' + id + '-pagination-next');
+    let elemPaginationMessage = $('#' + id + '-pagination-message');
+    let count                 = elemContent.find('.content-item').length;
+    
+    if(elemPaginationNext.length > 0) {
+        if(count < total) elemPaginationMessage.html('Showing ' + count + ' of ' + total + ' records');
+                     else elemPaginationMessage.html('Showing all ' + total + ' records');
+    }
+
+    if(elemPaginationNext.length > 0) {
+        if(count >= total) elemPaginationNext.addClass('hidden'); else elemPaginationNext.removeClass('hidden');
+    }
+
+}
 function finishPanelContentUpdate(id, settings, items, linkNew, data) {
 
     if(isBlank(data)) data = {};
@@ -2325,7 +2488,9 @@ function finishPanelContentUpdate(id, settings, items, linkNew, data) {
     }
 
     if(!isBlank(items)) {
-        if(settings.layout === 'table') {                 
+        if(settings.layout === 'tree') {                 
+            genTree(id, settings, items);
+        } else if(settings.layout === 'table') {                 
             genTable(id, items, settings);
         } else {
             genTilesList(id, items, settings);
@@ -2360,24 +2525,6 @@ function highlightNewPanelContent(id, linkNew) {
 }
 
 
-// Expand & Collapse all toggles for tree views
-function expandAllNodes(id) {
-
-    $('#' + id + '-content').find('.content-item').removeClass('hidden').removeClass('collapsed');
-    filterPanelContent(id);
-    
-}
-function collapseAllNodes(id) {
-
-    $('#' + id + '-content').find('.content-item').each(function() {
-        if(!$(this).hasClass('level-1')) {
-            $(this).addClass('hidden');
-        }
-        if($(this).hasClass('node')) $(this).addClass('collapsed');
-    });
-    
-}
-
 
 // Filter panel content based on search input
 function filterPanelContent(id) {
@@ -2385,6 +2532,7 @@ function filterPanelContent(id) {
     let elemSearchInput  = $('#' + id + '-search-input');
     let searchMode       = elemSearchInput.siblings('.icon.default').attr('data-mode');
     let searchInputValue = elemSearchInput.val().toUpperCase();
+    let elemTop          = $('#' + id);
     let elemContent      = $('#' + id + '-content');
     let elemNoData       = $('#' + id + '-no-data');
     let toggleSelected   = $('#' + id + '-filter-selected-only');
@@ -2396,6 +2544,7 @@ function filterPanelContent(id) {
     let filters          = [];
     let allHidden        = true;
     let clearAllFilters  = (searchInputValue === '');
+    let isTree           = elemTop.hasClass('tree') || elemContent.hasClass('tree');
 
     toggleFilters.each(function() {
         let elemToggle = $(this);
@@ -2424,7 +2573,7 @@ function filterPanelContent(id) {
     });
 
     if(toggleSelected.length > 0) {
-        if(toggleSelected.hasClass('icon-toggle-on')) {
+        if(toggleSelected.hasClass('toggle-on')) {
             filterSelected  = true;
             clearAllFilters = false;
         }  
@@ -2536,7 +2685,7 @@ function filterPanelContent(id) {
     if(!allHidden) {
         if(!clearAllFilters) {
             if(!filterSelected) {
-                if(elemContent.hasClass('tree')) {
+                if(isTree) {
                     
                     let parents = [];
 
@@ -2730,10 +2879,10 @@ function panelDeselectAll(id, elemClicked) {
     let elemContent        = $('#' + id + '-content');
     let elemFilterSelected = $('#' + id + '-filter-selected-only');
 
-    elemContent.find('.content-item').removeClass('selected').removeClass('checked');
+    elemContent.find('.content-item').removeClass('selected').removeClass('checked').removeClass('highlighted');
     elemContent.find('.content-select-all').removeClass('icon-check-box-checked').addClass('icon-check-box');
 
-    if(elemFilterSelected.length > 0) elemFilterSelected.removeClass('icon-toggle-on').addClass('icon-toggle-off').removeClass('filled');
+    if(elemFilterSelected.length > 0) elemFilterSelected.removeClass('toggle-on').addClass('toggle-off');
 
     filterPanelContent(id);
     updatePanelCalculations(id);
@@ -2762,6 +2911,7 @@ function panelReset(id, elemClicked) {
     
     if(elemSearch.length > 0) elemSearch.val('');
 
+    resetTreePath(id);
     filterPanelContent(id);
     updatePanelCalculations(id);
     togglePanelToolbarActions(elemClicked);
@@ -2930,6 +3080,289 @@ function panelResizeContents(id, contentSizes) {
     }
 
 }
+
+
+
+// Generate tree display and functionality
+function genTree(id, settings, items) {
+
+    let elemContent = $('#' + id + '-content');
+    let elemTable = $('<table></table').appendTo(elemContent)
+        .attr('id', id + '-table')
+        .addClass('tree-table')
+        .addClass('fixed-header');
+
+    let elemTHead = $('<thead></thead>').appendTo(elemTable).attr('id', id + '-thead').addClass('tree-thead');
+    let elemTBody = $('<tbody></tbody>').appendTo(elemTable).attr('id', id + '-tbody').addClass('tree-tbody');
+
+    elemContent.closest('.panel-top').addClass('tree');
+
+    genTreeHeaders(elemTHead);
+    genTreeRows(id, elemTBody, settings, items)
+    enableTreeToggles(id);
+
+    if(settings.hideTableHeader) elemTHead.remove();
+    if(settings.collapseContents) collapseAllNodes(id);
+
+    return elemTable;
+
+}
+function genTreeHeaders(elemTHead) {
+    
+    let elemTHRow = $('<tr></tr>').appendTo(elemTHead);
+
+    $('<th></th>').appendTo(elemTHRow)
+        .html('Item');
+
+}
+function genTreeRows(id, elemTBody, settings, items) {   
+
+    if(isBlank(settings.skipRootItem)) settings.skipRootItem = true;
+    if(isBlank(settings.hideNumber  )) settings.hideNumber =  true;
+
+    let index = (settings.skipRootItem) ? 1 : 0;
+
+    for(index; index < items.length; index++) {
+
+        let item = items[index];
+
+        let elemRow = $('<tr></tr>').appendTo(elemTBody)
+            .attr('data-part-number', item.partNumber)
+            .attr('data-link'       , item.link)
+            .attr('data-title'      , item.title)
+            .attr('data-title'      , item.title)
+            .attr('data-level'      , item.level)
+            .addClass('level-' + item.level)
+            .addClass('content-item')
+            .click(function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                clickContentItem($(this), e);
+                updateTreePath($(this));
+                updatePanelCalculations(id);
+                if(settings.viewerSelection) selectInViewer(id);
+                if(!isBlank(settings.onClickItem)) settings.onClickItem($(this));
+            }).dblclick(function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if(!isBlank(settings.onDblClickItem)) settings.onDblClickItem($(this));
+                else if(settings.openOnDblClick) openItemByLink($(this).attr('data-link'));
+            });
+
+
+        if(!isBlank(item.domProperties)) {
+            for(domProperty of item.domProperties) {
+                elemRow.attr('data-' + domProperty.key, domProperty.value);
+            }
+        }
+
+        $('<td></td>').appendTo(elemRow).addClass('tree-color');
+
+        let elemFirstCol = $('<td></td>').appendTo(elemRow).addClass('tree-first-col');
+
+        if(item.hasChildren) {
+            $('<span></span>').appendTo(elemFirstCol).addClass('tree-nav').addClass('icon');
+            elemRow.addClass('node');
+        } else elemRow.addClass('leaf');
+
+        if(!settings.hideNumber) $('<span></span>').appendTo(elemFirstCol).addClass('tree-number');
+
+        $('<span></span>').appendTo(elemFirstCol).addClass('tree-title').html(item.title);
+
+    }
+
+}
+function enableTreeToggles(id) {
+
+    $('#' + id).find('.tree-nav').click(function(e) {
+    
+        e.stopPropagation();
+        e.preventDefault();
+
+        let elemItem    = $(this).closest('tr');
+        let level       = Number(elemItem.attr('data-level'));
+        let levelNext   = level - 1;
+        let levelHide   = level + 2;
+        let elemNext    = $(this).closest('tr');
+        let doExpand    = elemItem.hasClass('collapsed');
+        let filterValue = $('#' + id + '-search-input').val().toLowerCase();
+        let isFiltered  = (isBlank(filterValue)) ? false : true;
+
+        if(e.shiftKey) levelHide = 100;
+
+        elemItem.toggleClass('collapsed');
+
+        do {
+
+            elemNext  = elemNext.next();
+            levelNext = Number(elemNext.attr('data-level'));
+
+            if(levelNext > level) {
+                if(doExpand) {
+                    if(levelHide > levelNext) {
+                        if((!isFiltered) || elemNext.hasClass('result') || elemNext.hasClass('result-parent')) {
+                            elemNext.removeClass('hidden');
+                            if(e.shiftKey) {
+                                elemNext.removeClass('collapsed');
+                            }
+                        }
+                    }
+                } else {
+                    elemNext.addClass('hidden');
+                    elemNext.addClass('collapsed');
+                }
+            }
+
+        } while(levelNext > level);
+
+    });
+
+}
+function expandAllNodes(id) {
+
+    $('#' + id + '-content').find('.content-item').removeClass('hidden').removeClass('collapsed');
+    filterPanelContent(id);
+    
+}
+function collapseAllNodes(id) {
+
+    $('#' + id + '-content').find('.content-item').each(function() {
+        if(!$(this).hasClass('level-1')) {
+            $(this).addClass('hidden');
+        }
+        if($(this).hasClass('node')) $(this).addClass('collapsed');
+    });
+    
+}
+function getTreeItemPath(elemItem, pathSeparator) {
+
+    if(isBlank(pathSeparator)) pathSeparator = '|'
+
+    let title = elemItem.attr('data-part-number') || elemItem.attr('data-title');
+    let level = Number(elemItem.attr('data-level'));
+
+    let result = {
+        link   : elemItem.attr('data-link'),
+        title  : title,
+        level  : level,
+        items  : [elemItem],
+        titles : [title],
+        levels : [level],
+        path   : title
+    }
+    
+    elemItem.prevAll('tr').each(function() {
+
+        let elemNext  = $(this);
+        let nextLevel = Number(elemNext.attr('data-level'));
+
+        if(nextLevel < level) {
+
+            title = elemNext.attr('data-part-number') || elemNext.attr('data-title');
+            result.path = title + pathSeparator + result.path;
+            result.items.unshift(elemNext);
+            result.titles.unshift(title);
+            result.levels.unshift(nextLevel);
+
+            level = nextLevel;
+
+        }
+
+    });
+
+    return result;
+
+}
+function updateTreePath(elemClicked) {
+
+    let elemTree = elemClicked.closest('.tree');
+    let id       = elemTree.attr('id');
+    let elemPath = $('#' + id + '-tree-path');
+
+    if(elemPath.length === 0) return;
+    
+    elemPath.html('').addClass('tree-path-empty');
+    
+    if(!elemClicked.hasClass('selected')) return;
+    
+    let path  = getTreeItemPath(elemClicked);
+    let index = 0;
+
+    elemPath.removeClass('tree-path-empty');
+
+    for(let item of path.items) {
+
+        let title = item.attr('data-part-number') || item.attr('data-title');
+
+        title = title.split(' - ')[0];
+
+        let elemItem = $('<div></div>').appendTo(elemPath)
+            .attr('data-number', item.attr('data-number'))
+            .attr('data-index', item.index())
+            .html(title);
+
+        if(path.items.length === 1) elemItem.addClass('tree-path-selected-single');
+
+        if(index < path.items.length - 1) {
+            elemItem.addClass('tree-path-parent');
+            elemItem.click(function() {
+                let index = $(this).attr('data-index');
+                let elemItem = $('#' + id + '-tbody').find('.content-item').eq(index);
+                treeScrollToItem($(this));
+                elemItem.click();
+            });
+        } else {
+            elemItem.addClass('tree-path-selected');
+            elemItem.click(function() {
+                treeScrollToItem($(this));
+            });
+        }
+
+        index++;
+
+    }
+
+}
+function resetTreePath(id) {
+
+    let elemPath = $('#' + id + '-tree-path');
+
+    if(elemPath.length === 0) return;
+    
+    elemPath.html('').addClass('tree-path-empty');
+    
+}
+function treeScrollToTop(id) {
+
+    let elemTree = $('#' + id + '-content');
+
+    elemTree.animate({ scrollTop: 0 }, 200);
+
+}
+function treeScrollToBottom(id) {
+
+    let elemTree = $('#' + id + '-content');
+    let elemItem = elemTree.find('.content-item').last();
+    let top      = elemItem.position().top;
+
+    elemTree.animate({ scrollTop: top }, 200);
+
+}
+function treeScrollToItem(elemClicked) {
+
+    let index    = elemClicked.attr('data-index');
+    let panel    = elemClicked.closest('.panel-top');
+    let id       = panel.attr('id');
+    let elemTree = $('#' + id + '-content');
+    let elemItem = $('#' + id + '-tbody').find('.content-item').eq(index);
+    let top      = elemTree.innerHeight() / 2;
+
+    top = elemItem.position().top - top;
+
+    elemTree.animate({ scrollTop: top }, 500);
+
+}
+
 
 
 // Generate list of tiles
@@ -3136,7 +3569,8 @@ function genSingleTile(params, settings) {
 
             let elemTileStatus = $('<div></div>').appendTo(elemTile)
                 .addClass('tile-status')
-                .css('background-color', color);
+                .css('background-color', color)
+                .attr('title', label);
                 
             $('<div></div>').appendTo(elemTileStatus)
                 .addClass('tile-status-label')
@@ -3248,39 +3682,6 @@ function addTilesListChevrons(id, settings, callback) {
 }
 
 
-
-// Generate single tile HTML
-// function genTile(link, urn, image, icon, title, subtitle) {
-
-//     let elemTile = $('<div></div>')
-//         .addClass('tile')
-//         .attr('data-title', title);
-
-//     if(link !== '') elemTile.attr('data-link', link);
-//     if(urn  !== '') elemTile.attr('data-urn',  urn );
-
-//     let elemTileImage   = $('<div></div>').appendTo(elemTile).addClass('tile-image');
-//     let elemTileDetails = $('<div></div>').appendTo(elemTile).addClass('tile-details');
-
-//     $('<div></div>').appendTo(elemTileDetails)
-//         .addClass('tile-title')
-//         .html(title);
-
-//     if(typeof subtitle !== 'undefined') {
-//         $('<div></div>')
-//             .addClass('tile-subtitle')
-//             .html(subtitle)
-//             .appendTo(elemTileDetails);
-//     }
-        
-//     getImageFromCache(elemTileImage, { 'link' : image }, icon, '', function() {});
-
-//     return elemTile;
-
-// }
-
-
-
 // Generate HTML Table & interactions
 function genTable(id, items, settings) {
 
@@ -3290,27 +3691,36 @@ function genTable(id, items, settings) {
     if(isBlank(settings.descriptor) ) settings.descriptor  = false;
     if(isBlank(settings.quantity)   ) settings.quantity    = false;
     if(isBlank(settings.hideDetails)) settings.hideDetails = false;
+    if(isBlank(settings.mode       )) settings.mode        = 'initial';
 
     let elemContent = $('#' + id + '-content');
-        elemContent.html('').show();
+    let elemTBody   = $('#' + id + '-tbody');
 
-    let elemTable = $('<table></table>').appendTo(elemContent)
-        .addClass('content-table')
-        .addClass('fixed-header')
-        .addClass('row-hovering')
-        .attr('id', id + '-table');
+    elemContent.show();
 
-    let elemTHead = $('<thead></thead>').appendTo(elemTable)
-        .addClass('content-thead')
-        .attr('id', id + '-thead');
+    if(settings.mode === 'initial') {
 
-    if(!settings.tableHeaders) { elemTHead.hide(); } else { genTableHeaders(id, elemTHead, settings); }
+        elemContent.html('');
+
+        let elemTable = $('<table></table>').appendTo(elemContent)
+            .addClass('content-table')
+            .addClass('fixed-header')
+            .addClass('row-hovering')
+            .attr('id', id + '-table');
+
+        let elemTHead = $('<thead></thead>').appendTo(elemTable)
+            .addClass('content-thead')
+            .attr('id', id + '-thead');
+
+        if(!settings.tableHeaders) { elemTHead.hide(); } else { genTableHeaders(id, elemTHead, settings); }
+
+        elemTBody = $('<tbody></tbody>').appendTo(elemTable)
+            .addClass('content-tbody')
+            .attr('id', id + '-tbody');
+
+    }
 
     let editableFields = (settings.editable) ? getEditableFields(settings.columns) : [];
-
-    let elemTBody = $('<tbody></tbody>').appendTo(elemTable)
-        .addClass('content-tbody')
-        .attr('id', id + '-tbody');
 
     genTableRows(id, elemTBody, settings, items, editableFields);
 
@@ -3434,7 +3844,8 @@ function genTableRanges(elemTHead, params) {
 }
 function genTableRows(id, elemTBody, settings, items, editableFields) {
 
-    let count = 1;
+    let count = elemTBody.children().length + 1;
+    let first = null;
 
     for(let item of items) {
 
@@ -3463,6 +3874,7 @@ function genTableRows(id, elemTBody, settings, items, editableFields) {
             });
 
         if(!isBlank(item.edge)) elemRow.attr('data-edge', item.edge);
+        if(!isBlank(item.root)) elemRow.attr('data-root-link', item.root);
 
         if(settings.editable && settings.multiSelect) {
 
@@ -3574,6 +3986,14 @@ function genTableRows(id, elemTBody, settings, items, editableFields) {
             for(let className of item.classNames) elemRow.addClass(className);
         }
 
+        if(first === null) first = elemRow.position().top;
+
+    }
+
+    if(settings.mode !== 'initial') {
+        let elemContent = $('#' + id + '-content');
+        let top = first - (elemContent.innerHeight() / 2);
+        elemContent.animate({ scrollTop: top }, 500);
     }
 
 }
@@ -3623,6 +4043,16 @@ function togglePanelToolbarActions(elemClicked) {
 
 }
 
+
+// Pagination : Load next page
+function panelPaginationLoadNext(settings) {
+
+    settings.page++;
+    settings.offset += settings.limit;
+    settings.mode = 'next';
+    settings.next();
+
+}
 
 // function togglePanelToolbarActions(elemClicked) {
 
@@ -4605,6 +5035,19 @@ function getSectionFieldValue(sections, fieldId, defaultValue, property) {
 
 
 
+// Retrieve item's classification data
+function getClassificationData(data) {
+
+    for(let section of data.sections) {
+       if(!isBlank(section.classificationId)) return section;
+    }
+
+    return {};
+
+}
+
+
+
 // Functions to handle BOM configuration data
 function getBOMViewDefinition(data, bomViewName, wsConfig) {
 
@@ -4868,6 +5311,55 @@ function getBOMParts(settings, parts, parent, edges, nodes, quantity, level, num
     return result;
 
 }
+function extendBOMPartsList(settings, items) {
+
+    let fields = settings.viewFields || settings.columns;
+    let result = [];
+
+    for (let item of items) {
+
+        let node = {
+            link          : item.node.item.link,
+            root          : item.node.rootItem.link,
+            title         : item.node.item.title,
+            partNumber    : item.node.partNumber,
+            totalQuantity : item.node.totalQuantity,
+            edge          : item.edge,
+            node          : item.node,
+            fields        : [],
+            details       : {}
+        }
+
+        for(let field of fields) {
+
+            let fieldData = {
+                fieldId     : field.fieldId,
+                name        : field.name,
+                displayName : field.displayName,
+                urn         : field.__self__.urn,
+                value       : ''
+            }
+            
+            node.details[field.fieldId] = null;
+
+            for(let nodeField of item.node.fields) {
+                if(nodeField.metaData.urn === fieldData.urn) {
+                    fieldData.value = nodeField.value;
+                    node.details[field.fieldId] = nodeField.value;
+                }
+            }
+            
+            node.fields.push(fieldData);
+
+        }
+
+        result.push(node);
+
+    }
+
+    return result;
+
+}
 function getBOMRollUpValues(bom, rollUps, nodeId, edge) {
 
     let result = [];
@@ -4949,19 +5441,6 @@ function getBOMPartsListChildren(bomPartsList, partNumber, edgeId, levels, inclu
 
 
 
-function onSerialNumberClick(elemClicked) {
-
-    if(elemClicked.hasClass('selected')) {
-        let partNumber = elemClicked.attr('data-part-number');
-        viewerSelectModel(partNumber);
-    } else {
-        viewerResetSelection();
-    }
-
-}
-
-
-
 // Validate if there are restricted columns in the BOM to validate item access permissions
 function hasBOMRestrictedFields(urn, nodes) {
 
@@ -4982,52 +5461,6 @@ function hasBOMRestrictedFields(urn, nodes) {
 
     return false;
     
-}
-
-
-
-// Retrieve field value from item's grid row data
-function getGridRowValue(row, fieldId, defaultValue, property) {
-
-    if(isBlank(row)) return defaultValue;
-
-    for(let iField = 1; iField < row.rowData.length; iField++) {
-
-        let field   = row.rowData[iField];
-        let id      = field.__self__.split('/')[10];
-
-        if(id === fieldId) {
-
-            let value = field.value;
-
-            if(isBlank(value)) return defaultValue;
-
-            if(typeof value === 'object') {
-
-                if(isBlank(property)) { return field.value.link;
-                } else if(property == 'title') { 
-                    let result = field.value.title;
-                    if(!isBlank(field.value.version)) result += ' ' + field.value.version;
-                    return result;
-                } else return field.value[property];
-                
-            } else if(field.type.title === 'Paragraph') {
-
-                var txt = document.createElement("textarea");
-                    txt.innerHTML = field.value;
-
-                return txt.value;
-
-            } else {
-
-                return field.value;
-            }
-
-        }
-    }
-
-    return defaultValue;
-
 }
 
 
@@ -5099,7 +5532,6 @@ function getTableauFieldValue(row, fieldId, defaultValue, property) {
 }
 
 
-
 // Retrieve first image field ID
 function getFirstImageFieldID(fields) {
 
@@ -5136,7 +5568,6 @@ function getAllImageFieldIDs(fields) {
 }
 
 
-
 // Retrieve first image field value from item's sections data
 function getFirstImageFieldValue(sections) {
 
@@ -5152,6 +5583,68 @@ function getFirstImageFieldValue(sections) {
     }
 
     return '';
+
+}
+
+
+// Retrieve field value from item's grid row data
+function getGridRowValue(row, fieldId, defaultValue, property) {
+
+    if(isBlank(row)) return defaultValue;
+
+    for(let iField = 1; iField < row.rowData.length; iField++) {
+
+        let field   = row.rowData[iField];
+        let id      = field.__self__.split('/')[10];
+
+        if(id === fieldId) {
+
+            let value = field.value;
+
+            if(isBlank(value)) return defaultValue;
+
+            if(typeof value === 'object') {
+
+                if(isBlank(property)) { return field.value.link;
+                } else if(property == 'title') { 
+                    let result = field.value.title;
+                    if(!isBlank(field.value.version)) result += ' ' + field.value.version;
+                    return result;
+                } else return field.value[property];
+                
+            } else if(field.type.title === 'Paragraph') {
+
+                var txt = document.createElement("textarea");
+                    txt.innerHTML = field.value;
+
+                return txt.value;
+
+            } else {
+
+                return field.value;
+            }
+
+        }
+    }
+
+    return defaultValue;
+
+}
+
+
+// Retrieve field value from managed item's  row data
+function getManagedItemFieldValue(data, fieldId, defaultValue) {
+
+    if(isBlank(data)) return defaultValue;
+
+    for(let field of data.linkedFields) {
+        let id = field.__self__.split('/').pop();
+        if(id === fieldId) {
+            return field.value;
+        }
+    }
+
+    return defaultValue;
 
 }
 
@@ -5361,6 +5854,24 @@ function hasPermission(permissions, id) {
     }
 
     return false;
+
+}
+
+
+// Convert date value to locale string
+function convertDateToLocaleDate(value) {
+
+    if(!isBlank(value)) {
+
+        let valueDate = value.split(' ')[0]
+        let splitDate = valueDate.split('-');
+        let date      = new Date(splitDate[0], Number(splitDate[1] - 1), splitDate[2]);
+
+        return date.toLocaleDateString();
+
+    }
+
+    return '';
 
 }
 

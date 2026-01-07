@@ -48,7 +48,7 @@ router.get('/get-printer-status', function(req, res, next) {
 
 router.get('/submit-print-job', function(req, res, next) {
 
-    console.log(req.query.type);
+    // console.log(req.query.type);
 
     switch(req.query.type) {
 
@@ -81,15 +81,9 @@ router.get('/submit-print-job', function(req, res, next) {
 
     }
 
-    console.log('here');
-
     if(statusPrinter.supplies < 0) statusPrinter.supplies = 0;
 
-    console.log('here');
-
     if(statusPrinter.temperature > 80) statusPrinter.temperature = 80;
-
-    console.log('here');
 
     res.send(statusPrinter);
 
@@ -114,7 +108,8 @@ router.get('/storage/folders', function(req, res, next) {
 
     let response = {
         path    : path,
-        folders : []
+        folders : [],
+        url     : '/storage/folders'
     };
 
     if(fs.existsSync(path)) {
@@ -148,7 +143,8 @@ router.get('/storage/files', function(req, res, next) {
     let response = {
         path       : path,
         files      : [],
-        totalCount : 0
+        totalCount : 0,
+        url        : '/storage/files'
     };
 
     if(fs.existsSync(path)) {

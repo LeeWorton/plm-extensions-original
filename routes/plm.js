@@ -43,13 +43,18 @@ function getTenantLink(req) {
 function runPromised(url, headers) {
 
     return axios.get(url, {
-        'headers' : headers
+        headers : headers
     }).then(function(response) {
         return response.data;
     }).catch(function(error) {
         console.log('error');
         console.log(error);
     });
+
+}
+function validateFileInCache(filename) {
+
+    return fs.existsSync('storage/cache/' + filename);
 
 }
 function downloadFileToCache(url, filename) {
@@ -167,9 +172,9 @@ function deleteServerFolderPath(path) {
 }
 function sortArray(array, key, type) {
 
-    if(typeof type === 'undefine') type = 'string';
+    if(typeof type === 'undefined') type = 'string';
 
-    if(type.toLowerCase === 'string') {
+    if(type.toLowerCase() === 'string') {
 
         array.sort(function(a, b){
             var nameA=a[key].toLowerCase(), nameB=b[key].toLowerCase()
@@ -316,6 +321,15 @@ function getCacheEntry(req) {
     req.session.cache.push(cache);
 
     return cache;
+
+}
+function isBlank(value) {
+
+    if(typeof value === 'undefined') return true;
+    if(       value === null       ) return true;
+    if(       value === ''         ) return true;
+
+    return false;
 
 }
 
@@ -643,8 +657,9 @@ router.post('/create', function(req, res) {
     console.log('  /create');
     console.log(' --------------------------------------------');
     console.log('  req.body.wsId            = ' + req.body.wsId);
-    console.log('  req.body.sections.length = ' + ((typeof req.body.sections === 'undefined') ? 0 : req.body.sections.length));
-    console.log('  req.body.fields.length   = ' + ((typeof req.body.fields   === 'undefined') ? 0 : req.body.fields.length  ));
+    console.log('  req.body.sections.length = ' + ((typeof req.body.sections === 'undefined') ? 0 : req.body.sections.length         ));
+    console.log('  req.body.fields.length   = ' + ((typeof req.body.fields   === 'undefined') ? 0 : req.body.fields.length           ));
+    console.log('  req.body.derived.length  = ' + ((typeof req.body.derived  === 'undefined') ? 0 : req.body.derived.sections.length ));
     console.log('  req.body.image           = ' + req.body.image);
     console.log('  req.body.getDetails      = ' + req.body.getDetails);
     console.log(' ');
@@ -706,32 +721,53 @@ function genPayloadSectionsFields(req, prefix, mode) {
     for(let field of req.body.fields) {
 
         let fieldSection = getFieldSection(req.body.sections, field);
-        let sectionLink  = prefix + insertion + '/sections/' + fieldSection.__self__.split('/').pop();;
-        let isNewSection = true;
 
-        let fieldData    = {
-            __self__ : prefix   + '/views/1/fields/' + field.fieldId,
-            value    : getFieldValue(field)
-        }
+        if(fieldSection !== null) {
 
-        for(let section of sections) {
-            if(section.link === sectionLink) {
-                isNewSection = false;
-                section.fields.push(fieldData);
-                break;
+            let sectionId = fieldSection.__self__.split('/').pop();
+
+            let fieldData = {
+                __self__ : prefix   + '/views/1/fields/' + field.fieldId,
+                value    : getFieldValue(field)
             }
-        }
 
-        if(isNewSection) {
-            sections.push({
-                link   : sectionLink,
-                fields : [fieldData]
-            });
+            addPayloadSectionField(sections, prefix, insertion, sectionId, fieldData);
+
         }
 
     }
 
+    if(!isBlank(req.body.derived)) {
+        for(let derivedSection of req.body.derived.sections) {
+            let sectionId = derivedSection.link.split('/').pop();
+            for(let field of derivedSection.fields) {
+                addPayloadSectionField(sections, prefix, insertion, sectionId, field);
+            }
+        }
+    }
+
     return sections;
+
+}
+function addPayloadSectionField(sections, prefix, insertion, sectionId, fieldData) {
+
+    let sectionLink  = prefix + insertion + '/sections/' + sectionId;
+    let isNewSection = true;
+
+    for(let section of sections) {
+        if(section.link === sectionLink) {
+            isNewSection = false;
+            section.fields.push(fieldData);
+            break;
+        }
+    }
+
+    if(isNewSection) {
+        sections.push({
+            link   : sectionLink,
+            fields : [fieldData]
+        });
+    }
 
 }
 function getFieldSection(sections, field) {
@@ -806,11 +842,6 @@ function getFieldValue(field) {
             break;
 
     }
-
-    console.log('-------');
-    console.log(field.fieldId);
-    console.log(field.type);
-    console.log(field.value);
 
     return value;
 
@@ -1461,18 +1492,23 @@ router.get('/derived', function(req, res, next) {
     console.log(' ');
     console.log('  /derived');
     console.log(' --------------------------------------------');
-    console.log('  req.query.pivotItemId    = ' + req.query.pivotItemId);
-    console.log('  req.query.wsId           = ' + req.query.wsId);
-    console.log('  req.query.fieldId        = ' + req.query.fieldId);
+    console.log('  req.query.wsId        = ' + req.query.wsId);
+    console.log('  req.query.fieldId     = ' + req.query.fieldId);
+    console.log('  req.query.pivotItemId = ' + req.query.pivotItemId);
+    console.log('  req.query.link        = ' + req.query.link);
     console.log();
 
+    let pivotItemId = (typeof req.query.pivotItemId !== 'undefined') ? req.query.pivotItemId : req.query.link.split('/')[6];
+
     let  url = req.app.locals.tenantLink 
-        + '/api/v3/workspaces/' + req.query.wsId + '/views/1/pivots/' + req.query.fieldId
-        + '?pivotItemId=' + req.query.pivotItemId;
+        + '/api/v3/workspaces/' + req.query.wsId
+        + '/views/1/pivots/' + req.query.fieldId
+        + '?pivotItemId=' + pivotItemId;
 
     axios.get(url, {
         headers : req.session.headers
     }).then(function(response) {
+        if(response.data === '') response.data = { sections : [] }
         sendResponse(req, res, response, false);
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
@@ -2276,13 +2312,21 @@ router.get('/attachments', function(req, res, next) {
     console.log(' ');
     console.log('  /attachments');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId  = ' + req.query.wsId);
-    console.log('  req.query.dmsId = ' + req.query.dmsId);
-    console.log('  req.query.link  = ' + req.query.link);
+    console.log('  req.query.wsId        = ' + req.query.wsId);
+    console.log('  req.query.dmsId       = ' + req.query.dmsId);
+    console.log('  req.query.link        = ' + req.query.link);
+    console.log('  req.query.filenamesIn = ' + req.query.filenamesIn);
+    console.log('  req.query.filenamesEx = ' + req.query.filenamesEx);
     console.log();
 
     let url =  (typeof req.query.link !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
         url = req.app.locals.tenantLink + url + '/attachments?asc=name';
+
+    let filenamesIn = (typeof req.query.filenamesIn === 'undefined') ? [] : req.query.filenamesIn;
+    let filenamesEx = (typeof req.query.filenamesEx === 'undefined') ? [] : req.query.filenamesEx; 
+    
+    if(!Array.isArray(filenamesIn)) filenamesIn = [filenamesIn];
+    if(!Array.isArray(filenamesEx)) filenamesEx = [filenamesEx];
     
     let headers = getCustomHeaders(req);
         headers.Accept = 'application/vnd.autodesk.plm.attachments.bulk+json';
@@ -2290,8 +2334,44 @@ router.get('/attachments', function(req, res, next) {
     axios.get(url, {
         headers : headers
     }).then(function(response) {
-        let result = (response.data === '') ? [] : response.data.attachments;
-        sendResponse(req, res, { 'data' : result, 'status' : response.status }, false);
+
+        let result = [];
+
+        if(response.data !== '') {
+
+            for(let attachment of response.data.attachments) {
+                if(!isBlank(attachment.type)) {
+                    if(isBlank(attachment.type.extension)) {
+                        attachment.type.extension = '';
+                    }
+                }
+                let fileName  = attachment.resourceName + attachment.type.extension;
+                let included  = (filenamesIn.length === 0);
+
+                fileName = fileName.toLowerCase();
+
+                if(!included) {
+                    for(let filenameIn of filenamesIn) {
+                        if((fileName.indexOf(filenameIn.toLowerCase()) >= 0)) {
+                            included = true;
+                        }
+                    }
+                }
+
+                if(included) {
+                    for(let filenameEx of filenamesEx) {
+                        if((fileName.indexOf(filenameEx.toLowerCase()) >= 0)) {
+                            included = false;
+                        }
+                    }
+                }
+
+                if(included) result.push(attachment);
+
+            }
+
+        }
+        sendResponse(req, res, { data : result, status : response.status }, false);
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
@@ -2709,24 +2789,24 @@ function setStatus(req, fileId, callback) {
 }
 
 
-
 /* ----- SCREENSHOT UPLOAD ----- */
 router.post('/upload-screenshot', function(req, res) {
    
     console.log(' ');
     console.log('  /upload-screenshot');
     console.log(' --------------------------------------------');  
-    console.log('  req.body.wsId           = ' + req.body.wsId);
-    console.log('  req.body.dmsId          = ' + req.body.dmsId);
-    console.log('  req.body.link           = ' + req.body.link);
-    console.log('  req.body.folderName     = ' + req.body.folderName);
+    console.log('  req.body.wsId       = ' + req.body.wsId);
+    console.log('  req.body.dmsId      = ' + req.body.dmsId);
+    console.log('  req.body.link       = ' + req.body.link);
+    console.log('  req.body.fileName   = ' + req.body.fileName);
+    console.log('  req.body.folderName = ' + req.body.folderName);
     console.log();
 
     let link      = (typeof req.body.link !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
     let url       = req.app.locals.tenantLink + link + '/attachments';
     let folderId  = null;
     let timestamp = new Date().getTime();
-    let fileName  = 'screenshot-' + timestamp + '.jpg';
+    let fileName  = (typeof req.body.fileName === 'undefined') ? 'screenshot-' + timestamp + '.jpg' : req.body.fileName;
     let data      = req.body.image.value.replace(/^data:image\/\w+;base64,/, '');
     let stream    = new Buffer.from(data, 'base64');
     let path      = 'storage/uploads';
@@ -2764,8 +2844,6 @@ router.post('/upload-screenshot', function(req, res) {
     }); 
    
 });
-
-
 
 
 /* ----- ATTACHMENT IMPORT ----- */
@@ -3019,7 +3097,6 @@ function importAttachment(req, res, folderName, pathFile, pathSuccess, pathSkipp
 }
 
 
-
 /* ----- ATTACHMENTS : Delete defined attachments ----- */
 router.get('/delete-attachments', function(req, res, next) {
     
@@ -3054,7 +3131,6 @@ router.get('/delete-attachments', function(req, res, next) {
     });
     
 });
-
 
 
 /* ----- LIST ALL VIEWABLE ATTACHMENTS ----- */
@@ -3153,28 +3229,28 @@ function getViewerData(req, res, url, headers, enforce) {
 
 
 /* ----- GET ALL VIEWABLES  TO INIT FORGE VIEWER ----- */
-router.get('/get-viewables', function(req, res, next) {
+router.post('/get-viewables', function(req, res, next) {
     
     // same as list viewables, but also includes request to translate viewable if needed
 
     console.log(' ');
     console.log('  /get-viewables');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId           = ' + req.query.wsId);
-    console.log('  req.query.dmsId          = ' + req.query.dmsId);
-    console.log('  req.query.link           = ' + req.query.link);
-    console.log('  req.query.fileId         = ' + req.query.fileId);
-    console.log('  req.query.filename       = ' + req.query.filename);
-    console.log('  req.query.extensionsIn   = ' + req.query.extensionsIn);
-    console.log('  req.query.extensionsEx   = ' + req.query.extensionsEx);
+    console.log('  req.body.wsId           = ' + req.body.wsId);
+    console.log('  req.body.dmsId          = ' + req.body.dmsId);
+    console.log('  req.body.link           = ' + req.body.link);
+    console.log('  req.body.fileId         = ' + req.body.fileId);
+    console.log('  req.body.filename       = ' + req.body.filename);
+    console.log('  req.body.extensionsIn   = ' + req.body.extensionsIn);
+    console.log('  req.body.extensionsEx   = ' + req.body.extensionsEx);
     console.log();
     
-    let link         = (typeof req.query.link === 'undefined') ? '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId : req.query.link;
+    let link         = (typeof req.body.link === 'undefined') ? '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId : req.body.link;
     let url          = req.app.locals.tenantLink + link + '/attachments?asc=name';
-    let fileId       = (typeof req.query.fileId       === 'undefined') ? '' : req.query.fileId;
-    let filename     = (typeof req.query.filename     === 'undefined') ? '' : req.query.filename;
-    let extensionsIn = (typeof req.query.extensionsIn === 'undefined') ? ['dwf', 'dwfx', 'ipt', 'stp', 'step', 'sldprt', 'nwd', 'rvt'] : req.query.extensionsIn;
-    let extensionsEx = (typeof req.query.extensionsEx === 'undefined') ? [] : req.query.extensionsEx;
+    let fileId       = (typeof req.body.fileId       === 'undefined') ? '' : req.body.fileId;
+    let filename     = (typeof req.body.filename     === 'undefined') ? '' : req.body.filename;
+    let extensionsIn = (typeof req.body.extensionsIn === 'undefined') ? ['dwf', 'dwfx', 'ipt', 'stp', 'step', 'sldprt', 'nwd', 'rvt'] : req.body.extensionsIn;
+    let extensionsEx = (typeof req.body.extensionsEx === 'undefined') ? [] : req.body.extensionsEx;
 
     let headers = getCustomHeaders(req);
         headers.Accept = 'application/vnd.autodesk.plm.attachments.bulk+json';
@@ -3186,6 +3262,7 @@ router.get('/get-viewables', function(req, res, next) {
         let viewables = [];
 
         if(response.data !== '') {
+
 
             for(let i = 0; i < response.data.attachments.length; i++) {
 
@@ -3310,21 +3387,52 @@ router.get('/bom-views', function(req, res, next) {
     console.log(' ');
     console.log('  /bom-views');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId   = ' + req.query.wsId);
-    console.log('  req.query.link   = ' + req.query.link);
-    console.log('  req.query.tenant = ' + req.query.tenant);
+    console.log('  req.query.wsId     = ' + req.query.wsId);
+    console.log('  req.query.link     = ' + req.query.link);
+    console.log('  req.query.tenant   = ' + req.query.tenant);
+    console.log('  req.query.useCache = ' + req.query.useCache);
     console.log();
+
+    if(notCached(req, res)) {
     
-    let wsId = (typeof req.query.link !== 'undefined') ? req.query.link.split('/')[4] : req.query.wsId;
-    let url  = getTenantLink(req) + '/api/v3/workspaces/' + wsId + '/views/5';
-    
-    axios.get(url, {
-        headers : req.session.headers
-    }).then(function(response) {
-        sendResponse(req, res, { 'data' : response.data.bomViews, 'status' : response.status }, false, 'bom-views');
-    }).catch(function(error) {
-        sendResponse(req, res, error.response, true, 'bom-views');
-    });
+        let wsId = (typeof req.query.link !== 'undefined') ? req.query.link.split('/')[4] : req.query.wsId;
+        let url  = getTenantLink(req) + '/api/v3/workspaces/' + wsId + '/views/5';
+        
+        axios.get(url, {
+            headers : req.session.headers
+        }).then(function(response) {
+
+            let requests = [];
+
+            for(let bomView of response.data.bomViews) requests.push(runPromised(getTenantLink(req) + bomView.link, req.session.headers));
+
+            Promise.all(requests).then(function(results) {
+
+                sortArray(results, 'name', 'string');
+
+                response.data.bomViews = [];
+
+                for(let result of results) {
+                    response.data.bomViews.push({
+                        id        : result.id,
+                        name      : result.name,
+                        isDefault : result.isDefault,
+                        link      : result.__self__.link,
+                        urn       : result.__self__.urn,
+                    })
+                }
+
+                sendResponse(req, res, response, false);
+
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true);
+            });        
+
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true, 'bom-views');
+        });
+
+    }
     
 });
 
@@ -3353,7 +3461,7 @@ router.get('/bom-views-and-fields', function(req, res, next) {
             let requestsBasics  = [];
             let requestsFields  = [];
 
-            for(bomView of response.data.bomViews) {
+            for(let bomView of response.data.bomViews) {
                 requestsBasics.push(runPromised(getTenantLink(req) + bomView.link, req.session.headers));
                 requestsFields.push(runPromised(getTenantLink(req) + bomView.link + '/fields', req.session.headers));
             }
@@ -3415,26 +3523,89 @@ router.get('/bom-view-fields', function(req, res, next) {
 });
 
 
+/* ----- GET BOM VIEW BY NAME ----- */
+router.get('/bom-view-by-name', function(req, res, next) {
+        
+    console.log(' ');
+    console.log('  /bom-view-by-name');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.wsId     = ' + req.query.wsId);
+    console.log('  req.query.link     = ' + req.query.link);
+    console.log('  req.query.tenant   = ' + req.query.tenant);
+    console.log('  req.query.name     = ' + req.query.name);
+    console.log('  req.query.useCache = ' + req.query.useCache);
+    console.log();
+
+    if(notCached(req, res)) {
+    
+        let wsId = (typeof req.query.link !== 'undefined') ? req.query.link.split('/')[4] : req.query.wsId;
+        let url  = getTenantLink(req) + '/api/v3/workspaces/' + wsId + '/views/5';
+        
+        axios.get(url, {
+            headers : req.session.headers
+        }).then(function(response) {
+
+            let requests = [];
+
+            for(let bomView of response.data.bomViews) requests.push(runPromised(getTenantLink(req) + bomView.link, req.session.headers));
+
+            Promise.all(requests).then(function(results) {
+
+                let response = { data : null }
+
+                for(let result of results) {
+
+                    if(result.name == req.query.name) {
+                        response.data = {
+                            id        : result.id,
+                            name      : result.name,
+                            isDefault : result.isDefault,
+                            link      : result.__self__.link,
+                            urn       : result.__self__.urn
+                        };
+                        break;
+                    }
+
+                }
+
+                sendResponse(req, res, response, false);
+
+            }).catch(function(error) {
+                sendResponse(req, res, error.response, true);
+            });        
+
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true, 'bom-views');
+        });
+
+    }
+    
+});
+
+
 /* ----- BOM DATA ----- */
 router.get('/bom', function(req, res, next) {
         
     console.log(' ');
     console.log('  /bom');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId           = ' + req.query.wsId);
-    console.log('  req.query.dmsId          = ' + req.query.dmsId);
-    console.log('  req.query.link           = ' + req.query.link);
-    console.log('  req.query.depth          = ' + req.query.depth);
-    console.log('  req.query.revisionBias   = ' + req.query.revisionBias);
-    console.log('  req.query.effectiveDate  = ' + req.query.effectiveDate);
-    console.log('  req.query.viewId         = ' + req.query.viewId);
+    console.log('  req.query.wsId            = ' + req.query.wsId);
+    console.log('  req.query.dmsId           = ' + req.query.dmsId);
+    console.log('  req.query.link            = ' + req.query.link);
+    console.log('  req.query.depth           = ' + req.query.depth);
+    console.log('  req.query.revisionBias    = ' + req.query.revisionBias);
+    console.log('  req.query.effectiveDate   = ' + req.query.effectiveDate);
+    console.log('  req.query.viewId          = ' + req.query.viewId);
+    console.log('  req.query.getBOMPartsList = ' + req.query.getBOMPartsList);
+
     
-    let revisionBias    = (typeof req.query.revisionBias !== 'undefined') ? req.query.revisionBias : 'release';
-    let depth           = (typeof req.query.depth !== 'undefined') ? req.query.depth : 10;
-    let link            = (typeof req.query.link  !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
-    let rootId          = (typeof req.query.link  !== 'undefined') ? req.query.link.split('/')[6] : req.query.dmsId;
-    let url             = req.app.locals.tenantLink + link + '/bom?depth=' + depth + '&revisionBias=' + revisionBias + '&rootId=' + rootId;
-    let headers         = getCustomHeaders(req);
+    let revisionBias = (typeof req.query.revisionBias !== 'undefined') ? req.query.revisionBias : 'release';
+    let depth        = (typeof req.query.depth !== 'undefined') ? req.query.depth : 10;
+    let getPartsList = (typeof req.query.getBOMPartsList !== 'undefined') ? req.query.getBOMPartsList : false;
+    let link         = (typeof req.query.link  !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
+    let rootId       = (typeof req.query.link  !== 'undefined') ? req.query.link.split('/')[6] : req.query.dmsId;
+    let url          = req.app.locals.tenantLink + link + '/bom?depth=' + depth + '&revisionBias=' + revisionBias + '&rootId=' + rootId;
+    let headers      = getCustomHeaders(req);
 
     if(typeof req.query.viewId        !== 'undefined') url += '&viewDefId='     + req.query.viewId;
     if(typeof req.query.effectiveDate !== 'undefined') url += '&effectiveDate=' + req.query.effectiveDate;
@@ -3444,9 +3615,24 @@ router.get('/bom', function(req, res, next) {
     axios.get(url, {
         headers : headers
     }).then(function(response) {
+
         sortArray(response.data.edges, 'itemNumber', '');
         sortArray(response.data.edges, 'depth', '');
-        sendResponse(req, res, response, false);
+
+        if(getPartsList) {
+
+            let workspaceId = link.split('/')[4];
+            let urlFields   = req.app.locals.tenantLink + '/api/v3/workspaces/' + workspaceId + '/views/5/viewdef/' + req.query.viewId + '/fields';
+
+            axios.get(urlFields, {
+                headers : req.session.headers
+            }).then(function(bomViewFields) {
+                response.data.bomPartsList = getBOMPartsList(response.data, bomViewFields.data, null);
+                sendResponse(req, res, response, false);
+            });
+
+        } else sendResponse(req, res, response, false);
+
     }).catch(function(error) {
         sendResponse(req, res, error.response, true);
     });
@@ -4066,7 +4252,6 @@ router.get('/lifecycle-transition', function(req, res, next) {
 });
 
 
-
 /* ----- MY OUTSTANDING WORK ----- */
 router.get('/mow', function(req, res, next) {
     
@@ -4489,7 +4674,6 @@ router.post('/search-descriptor', function(req, res, next) {
 });
 
 
-
 /* ----- SEARCH BULK ----- */
 router.get('/search-bulk', function(req, res, next) {
     
@@ -4522,7 +4706,7 @@ router.get('/search-bulk', function(req, res, next) {
     
     if(bulk) headers.Accept = 'application/vnd.autodesk.plm.items.bulk+json';
     
-    if(notCached(req, res, 'search-bulk', url)) {
+    if(notCached(req, res)) {
 
         axios.get(url, {
             headers : headers
@@ -4535,6 +4719,206 @@ router.get('/search-bulk', function(req, res, next) {
 
     }
     
+});
+
+
+/* ----- SEARCH IN CLASS ----- */
+router.get('/search-class', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /search-class');
+    console.log(' --------------------------------------------'); 
+    console.log('  req.query.className = ' + req.query.className);
+    console.log('  req.query.query     = ' + req.query.query);
+    console.log('  req.query.sort      = ' + req.query.sort);
+    console.log('  req.query.limit     = ' + req.query.limit);
+    console.log('  req.query.offset    = ' + req.query.offset); 
+    console.log('  req.query.page      = ' + req.query.page); 
+    console.log('  req.query.bulk      = ' + req.query.bulk); 
+    console.log('  req.query.revision  = ' + req.query.revision); 
+    console.log('  req.query.useCache  = ' + req.query.useCache); 
+    console.log();
+
+    let query       = (typeof req.query.query    === 'undefined') ?   '' : req.query.query;
+    let sort        = (typeof req.query.sort     === 'undefined') ?   '' : req.query.sort;
+    let limit       = (typeof req.query.limit    === 'undefined') ?   10 : req.query.limit;
+    let offset      = (typeof req.query.offset   === 'undefined') ?    0 : req.query.offset;
+    let page        = (typeof req.query.page     === 'undefined') ?  '1' : req.query.page;
+    let bulk        = (typeof req.query.bulk     === 'undefined') ? true : req.query.bulk;
+    let revision    = (typeof req.query.revision === 'undefined') ?  '1' : req.query.revision;
+
+    if(query === '') query = '(CLASS:CLASS_PATH="' + req.query.className + '")';
+
+    let url  = req.app.locals.tenantLink + '/api/v3/search-results?limit=' + limit + '&offset=' + offset + '&page=' + page + '&revision=' + revision ;
+        url += '&query=' + query;
+
+    if(sort !== '') url += '&sort=' + sort;
+
+    let headers = getCustomHeaders(req);
+
+    if(bulk) headers.Accept = 'application/vnd.autodesk.plm.items.bulk+json';
+    
+    if(notCached(req, res)) {
+
+        axios.get(url, {
+            headers : headers
+        }).then(function(response) {
+            if(response.data === "") response.data = { 'items' : [] }
+            sendResponse(req, res, response, false);
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true);
+        });
+
+    }
+    
+});
+
+
+/* ----- GET CLASSIFICATION CLASSES ----- */
+router.get('/classes', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /classes');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.size     = ' + req.query.size);
+    console.log('  req.query.page     = ' + req.query.page);
+    console.log('  req.query.useCache = ' + req.query.useCache);
+    console.log();
+
+    if(notCached(req, res)) {
+
+        let size = (typeof req.query.size === 'undefined') ? 500 : req.query.size;
+        let page = (typeof req.query.page === 'undefined') ?   1 : req.query.page;
+        let url  = getTenantLink(req) + '/api/v2/classifications?size=' + size + '&page=' + page;
+
+        axios.get(url, {
+            headers : req.session.headers
+        }).then(function(response) {
+            sendResponse(req, res, response, false);
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true);
+        });
+
+    }
+
+});
+
+
+/* ----- GET CLASSIFICATION TREE ----- */
+router.get('/classes-tree', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /classes-tree');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.useCache = ' + req.query.useCache);
+    console.log();
+
+    if(notCached(req, res)) {
+
+        let url  = getTenantLink(req) + '/api/v2/classifications/1/graphs/adjacency-set';
+
+        axios.get(url, {
+            headers : req.session.headers
+        }).then(function(response) {
+            sendResponse(req, res, response, false);
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true);
+        });
+
+    }
+
+});
+
+
+/* ----- GET CLASSIFICATION PROPERTIES ----- */
+router.get('/class-properties', function(req, res, next) {
+    
+    console.log(' ');
+    console.log('  /class-properties');
+    console.log(' --------------------------------------------');  
+    console.log('  req.query.classId  = ' + req.query.classId);
+    console.log('  req.query.link     = ' + req.query.link);
+    console.log('  req.query.size     = ' + req.query.size);
+    console.log('  req.query.page     = ' + req.query.page);
+    console.log('  req.query.useCache = ' + req.query.useCache);
+    console.log();
+
+    if(notCached(req, res)) {
+
+        let classId = (typeof req.query.classId === 'undefined') ? req.query.link.split('/').pop() : req.query.classId;
+        let size    = (typeof req.query.size === 'undefined') ? 500 : req.query.size;
+        let page    = (typeof req.query.page === 'undefined') ?   1 : req.query.page;
+        let baseURL = getTenantLink(req);
+        let url     = baseURL + '/api/v2/property-instances?'
+            + 'classification=' + classId
+            + '&inherited=true'
+            + '&page=' + page
+            + '&size=' + size;
+
+        axios.get(url, {
+            headers : req.session.headers
+        }).then(function(propertyData) {
+
+            let requests = [];
+            let results  = { data : [], status : 200 };
+
+            for(let property of propertyData.data.propertyInstances) {
+                requests.push(runPromised(baseURL + '/api/v2/property-instances/' + property.id + '/properties', req.session.headers));
+            }
+
+            Promise.all(requests).then(function(properties) {
+
+                let index             = 0;
+                let requestsPicklists = [];
+
+                for(let property of properties) {
+
+                    let property = properties[index].properties[0];
+                    let instance = propertyData.data.propertyInstances[index++];
+
+                    results.data.push({
+                        type         : property.type,
+                        name         : property.name,
+                        displayName  : property.displayName,
+                        rank         : property.rank,
+                        required     : property.required,
+                        readOnly     : property.readOnly,
+                        defaultValue : property.defaultValue,
+                        picklist     : [],
+                        inherited    : instance.inherited
+                    });
+
+                    if(property.type === 'picklist') {
+                        requestsPicklists.push(runPromised(baseURL + '/api/v3/lookups/CUSTOM_LOOKUP_0CWS_' + property.name + '_' + classId +  '?asc=title&filter=&limit=100&offset=0', req.session.headers));
+                    }
+
+                }
+
+                sortArray(results.data, 'displayName');
+
+                Promise.all(requestsPicklists).then(function(responses) {
+
+                    for(let response of responses) {
+                        for(let property of results.data) {
+                            let name = response.urn.split('CUSTOM_LOOKUP_0CWS_')[1];
+                            if((property.name + '_' + classId) === name) {
+                                property.picklist = response.items;
+                            }
+                        }
+                    }
+
+                    sendResponse(req, res, results, false);
+
+                });
+
+            });
+
+        }).catch(function(error) {
+            sendResponse(req, res, error.response, true);
+        });
+
+    }
+
 });
 
 
@@ -5418,9 +5802,9 @@ router.get('/workspace-workflow-transitions', function(req, res, next) {
     console.log(' ');
     console.log('  /workspace-workflow-transitions');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId   = ' + req.query.wsId);
-    console.log('  req.query.link   = ' + req.query.link);
-    console.log('  req.query.tenant = ' + req.query.tenant);
+    console.log('  req.query.wsId     = ' + req.query.wsId);
+    console.log('  req.query.link     = ' + req.query.link);
+    console.log('  req.query.tenant   = ' + req.query.tenant);
     console.log('  req.query.useCache = ' + req.query.useCache);
     console.log();
 
@@ -5994,11 +6378,10 @@ async function getExcelExportData(req, res, path) {
             
             proceed = false;
 
-            switch(sheet.type) {
+            switch(sheet.type.toLowerCase()) {
 
-                case 'grid': 
-                    getExcelExportGrid(req, res, path, sheet);
-                    break;
+                case 'bom'  : getExcelExportBOM (req, res, path, sheet); break;
+                case 'grid' : getExcelExportGrid(req, res, path, sheet); break;
 
             }
 
@@ -6014,13 +6397,16 @@ async function getExcelExportData(req, res, path) {
 
         for(let sheet of req.body.sheets) {
 
+            if(Array.isArray(sheet.freezeCols)) sheet.freezeCols = sheet.freezeCols.length;
+            if(Array.isArray(sheet.freezeRows)) sheet.freezeRows = sheet.freezeRows.length;
+
             let sheetProperties = {
                 pageSetup  : { paperSize: 9, orientation : 'landscape' },
                 properties : { defaultRowHeight : sheet.rowHeight },
                 views      : [{
                     state           : 'frozen',
-                    xSplit          : 0, 
-                    ySplit          : 1,
+                    xSplit          : sheet.freezeCols | 0, 
+                    ySplit          : sheet.freezeRows | 1,
                     showGridLines   : false
                 }]
             }
@@ -6077,12 +6463,378 @@ async function getExcelExportData(req, res, path) {
 
         await workbook.xlsx.writeFile(path + '/' + req.body.fileName);
 
-        console.log('1');
-
         sendResponse(req, res, { data : { fileUrl : path + '/' + req.body.fileName} } , false);
 
     }
 
+}
+function getExcelExportBOM(req, res, path, sheet) {
+
+    if(typeof sheet.hideRoot     === 'undefined') sheet.hideRoot     = false;
+    if(typeof sheet.bomView      === 'undefined') sheet.bomView      = '';
+    if(typeof sheet.depth        === 'undefined') sheet.depth        = 10;
+    if(typeof sheet.revisionBias === 'undefined') sheet.revisionBias = 'release';
+    if(typeof sheet.selectItems  === 'undefined') sheet.selectItems  = '{}';
+
+    let baseURL       = getTenantLink(req);
+    let viewsURL      = baseURL + '/api/v3/workspaces/' + sheet.link.split('/')[4] + '/views/5';
+    let bomURL        = baseURL + sheet.link + '/bom?depth' + sheet.depth + '&revisionBias=' + sheet.revisionBias;
+    let bomViewId     = null;
+    let bomViewFields = [];
+
+    axios.get(viewsURL, { headers : req.session.headers }).then(function(response) {
+
+        let requestsBasics  = [];
+        let requestsFields  = [];
+
+        for(let bomView of response.data.bomViews) {
+            requestsBasics.push(runPromised(baseURL + bomView.link, req.session.headers));
+            requestsFields.push(runPromised(baseURL + bomView.link + '/fields', req.session.headers));
+        }
+
+        Promise.all(requestsBasics).then(function(responses) {
+
+            let views = responses;
+            let index = 0;
+
+            Promise.all(requestsFields).then(function(fields) {
+
+                for(let view of views) {
+                    if(view.name === sheet.bomView) {
+                        bomViewId = view.id;
+                        bomViewFields = fields[index];
+                        break;
+                    } else if(view.isDefault) {
+                        bomViewId = view.id;
+                        bomViewFields = fields[index];
+                    }
+                    index++;
+                }
+
+                let headers        = getCustomHeaders(req);
+                    headers.Accept = 'application/vnd.autodesk.plm.bom.bulk+json';
+
+                axios.get(bomURL + '&viewDefId=' + bomViewId, {
+                    headers : headers
+                }).then(function(response) {
+
+                    sortArray(response.data.edges, 'itemNumber', '');
+                    sortArray(response.data.edges, 'depth', '');
+
+                    let bomPartsList = getBOMPartsList(response.data, bomViewFields, sheet.selectItems, sheet.hideRoot);
+                    let colIndex     = 0;
+                    let colSort      = (Array.isArray(sheet.freezeCols)) ? sheet.freezeCols.length : sheet.freezeCols;
+
+                    // colSort += 100;
+
+                    for(let field of bomViewFields) {
+
+                        if((sheet.fieldsIn.length === 0) || (sheet.fieldsIn.includes(field.fieldId)) || (sheet.fieldsIn.includes(field.name))) {
+                            if((sheet.fieldsEx.length === 0) || ((!sheet.fieldsEx.includes(field.fieldId)) && (!sheet.fieldsEx.includes(field.name))) ) {
+
+                                let width = (colIndex <= sheet.colWidths.length) ? sheet.colWidths[colIndex++] : 20;
+
+                                sheet.columns.push({
+                                    header : field.name,
+                                    key    : field.fieldId,
+                                    width  : width,
+                                    sort   : ++colSort
+                                });
+
+                                field.sort = colSort;
+
+                            }
+                        }
+                    }
+
+                    if(!isBlank(sheet.totalQty)) {
+
+                        let totalQtySort = Number(sheet.totalQty.column) || ++colSort;
+                        
+                        for(let sheetCol of sheet.columns) {
+                            if(sheetCol.sort >= totalQtySort) {
+                                sheetCol.sort = sheetCol.sort + 1;
+                            }
+                        }
+
+                        for(let bomViewField of bomViewFields) {
+                            if(bomViewField.sort >= totalQtySort) {
+                                bomViewField.sort = bomViewField.sort + 1;
+                            }
+                        }
+
+                        bomViewFields.push({
+                            fieldId : 'totalQuantity',
+                            sort    : totalQtySort
+                        })
+                        
+                        sheet.columns.push({
+                            header : sheet.totalQty.label || 'Total Qty',
+                            key    : 'totalQuantity',
+                            width  : 16,
+                            sort   : totalQtySort
+                        });
+
+                        sortArray(bomViewFields, 'sort', 'integer');
+                        sortArray(sheet.columns, 'sort', 'integer');
+
+                    }
+
+                    if(!isBlank(sheet.freezeCols)) {
+                        if(Array.isArray(sheet.freezeCols)) {
+                            
+                            let index = 1;
+                            for(let freezeCol of sheet.freezeCols) {
+                                for(let sheetCol of sheet.columns) {
+                                    if(freezeCol === sheetCol.key) sheetCol.sort = index;
+                                    else if(freezeCol === sheetCol.header) sheetCol.sort = index;
+
+                                }
+                                index++;
+                            }
+                            sortArray(sheet.columns, 'sort', 'integer');
+                        }
+                    }
+
+                    for(let bomPart of bomPartsList) {
+
+                        let params = {};
+
+                        for(let field of bomViewFields) {
+                            if(field.fieldId === 'totalQuantity') {
+                                params.totalQuantity = bomPart.totalQuantity;
+                            } else {
+
+                                let value = bomPart.details[field.fieldId];
+                                if(!isBlank(value)) {
+                                    if(typeof value === 'object') value = value.title;
+                                }
+                                params[field.fieldId] = value;
+                            }
+                        }
+
+                        sheet.rows.push(params);
+
+                    }
+
+                    sheet.pending = false;
+                    getExcelExportData(req, res, path);
+
+                });
+            });
+        });
+    });
+
+}
+function getBOMPartsList(data, fields, selectItems, hideRoot) {
+
+    if(isBlank(hideRoot)) hideRoot = false;
+
+    let parts   = [];
+    let iEdge   = 0;
+    let urns    = {};
+    let urnRoot = data.root;
+
+    for(let field of fields) {
+        if(field.fieldId === 'QUANTITY') {
+            urns.quantity = field.__self__.urn;
+        } else if(field.fieldId === 'NUMBER') {
+            urns.partNumber = field.__self__.urn;
+        }
+        if(!isBlank(selectItems)) {
+            if(field.fieldId === selectItems.fieldId) urns.selectItems = field.__self__.urn;
+        }
+    }
+
+   
+
+    let node = { 
+        quantity      : '0',
+        partNumber    : getBOMCellValue(data.root, urns.partNumber, data.nodes),
+        linkParent    : '',
+        level         : 0,
+        parent        : '',
+        parents       : [],
+        fields        : [],
+        edgeId        : null,
+        number        : null,
+        numberPath    : '',
+        details       : {},
+        totalQuantity : 0,
+        hasChildren   : (data.edges.length > 0)
+    }
+
+    node.path = node.partNumber;
+
+    for(let bomNode of data.nodes) {
+        if(bomNode.item.urn === urnRoot) {
+            insertBOMPartDetails(fields, node, bomNode, null);
+            break;
+        }
+    }
+
+    if(!hideRoot) parts.push(node);
+
+    getBOMParts(fields, selectItems, iEdge, urns, parts, data.root, data.edges, data.nodes, 1.0, 1, '', [node.partNumber]);
+
+    return parts;
+
+}
+function getBOMParts(fields, selectItems, iEdge, urns, parts, parent, edges, nodes, quantity, level, numberPath, parents) {
+
+    let result = { hasChildren : false };
+
+    for(let i = iEdge; i < edges.length; i++) {
+
+        let edge = edges[i];
+
+        if(edge.parent === parent) {
+
+            if(i === iEdge + 1) iEdge = i;
+
+            let node = { 
+                quantity    : getBOMEdgeValue(edge, urns.quantity, null, 0),
+                partNumber  : getBOMCellValue(edge.child, urns.partNumber, nodes),
+                linkParent  : edge.edgeLink.split('/bom-items')[0],
+                level       : level,
+                parent      : parents[parents.length - 1],
+                parents     : parents.slice(),
+                fields      : [],
+                edgeId      : edge.edgeId,
+                number      : edge.itemNumber,
+                numberPath  : numberPath + edge.itemNumber,
+                details     : {}
+            }
+
+            node.totalQuantity = node.quantity * quantity;
+
+            node.path = node.parents.map(function(parent) {
+                return parent;
+            }).join('|') + '|' + node.partNumber;
+
+            result.hasChildren = true;
+
+            for(let bomNode of nodes) {
+
+                if(bomNode.item.urn === edge.child) {
+                    insertBOMPartDetails(fields, node, bomNode, edge);
+                    break;
+                }
+            }
+
+            if(!isBlank(selectItems)) {      
+                if(selectItems.hasOwnProperty('values')) {
+                    let selectValue = getBOMCellValue(edge.child, urns.selectItems, nodes);
+                    if(selectValue === '') selectValue = getBOMEdgeValue(edge, urns.selectItems, 'title', '');
+                    if(selectItems.values.includes(selectValue)) parts.push(node);
+                } else parts.push(node);
+            } else {
+                parts.push(node);
+            }
+
+            let nextParents = parents.slice();
+                nextParents.push(node.partNumber);
+
+            let nodeBOM = getBOMParts(fields, selectItems, iEdge, urns, parts, edge.child, edges, nodes, node.totalQuantity, level + 1, numberPath + edge.itemNumber + '.', nextParents);
+
+            node.hasChildren = nodeBOM.hasChildren;
+
+        }
+
+    }
+
+    return result;
+
+}
+function insertBOMPartDetails(fields, node, bomNode, edge) {
+
+    node.link     = bomNode.item.link;
+    node.title    = bomNode.item.title;
+    node.revision = bomNode.item.version;
+    node.root     = bomNode.rootItem.link;
+
+    for(let field of fields) {
+
+        let fieldData = {
+            fieldId     : field.fieldId,
+            name        : field.name,
+            displayName : field.displayName,
+            urn         : field.__self__.urn,
+            value       : ''
+        }
+                        
+        node.details[field.fieldId] = null;
+
+        for(let nodeField of bomNode.fields) {
+            if(nodeField.metaData.urn === fieldData.urn) {
+                let value = (typeof nodeField.value === 'object') ? nodeField.value.title : nodeField.value;
+                fieldData.value = nodeField.value;
+                node.details[field.fieldId] = value;
+            }
+        }
+
+        if(!isBlank(edge)) {
+            for(let edgeField of edge.fields) {
+                if(edgeField.metaData.urn === fieldData.urn) {
+                    let value = (typeof edgeField.value === 'object') ? edgeField.value.title : edgeField.value;
+                    fieldData.value = edgeField.value;
+                    node.details[field.fieldId] = value;
+                }
+            }
+        }
+                        
+        node.fields.push(fieldData);
+
+    }
+
+}
+function getBOMCellValue(urn, key, nodes, property) {
+
+    if(urn === '') return '';
+
+    for(let node of nodes) {
+        if(node.item.urn === urn) {
+
+            for(let field of node.fields) {
+                if((field.metaData.urn === key) || (field.metaData.link === key)) {
+
+                    if(field.value === null) { return '';
+                    } else if(typeof field.value === 'object') {
+                        if(typeof property === 'undefined') return field.value.link;
+                        else return field.value[property];
+                    } else if(typeof field.value !== 'undefined') {
+                        return field.value;
+                    } else {
+                        return '';
+                    }
+
+                }
+            }
+        }
+    }
+
+    return '';
+    
+}
+function getBOMEdgeValue(edge, key, property, defaultValue) {
+
+    if(typeof defaultValue === 'undefined') defaultValue = '';
+
+    for(let field of edge.fields) {
+        if(field.metaData.urn === key) {
+            if(typeof field.value === 'object') {
+                if(typeof property === 'undefined') return field.value.link;
+                else return field.value[property];
+            } else if(typeof field.value !== 'undefined') {
+                return field.value;
+            } else {
+                return defaultValue;
+            }
+        }
+    }
+
+    return defaultValue;
+    
 }
 function getExcelExportGrid(req, res, path, sheet) {
 

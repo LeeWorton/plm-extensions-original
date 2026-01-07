@@ -305,6 +305,7 @@ function insertCreate(workspaceNames, workspaceIds, params) {
         [ 'cancelButtonIcon'    , '' ],
         [ 'cancelButtonLabel'   , 'Cancel' ],
         [ 'cancelButtonTitle'   , '' ],
+        [ 'performTransition'   , '' ],
         [ 'getDetails'          , false ],
         [ 'onClickCancel'       , function(id) { } ],
         [ 'afterCreation'       , function(id, link, data, contextId) { console.log('New item link : ' + link ); } ]
@@ -472,16 +473,39 @@ function insertCreateData(id) {
         requests.push($.get('/plm/recent'));
     }
     
+    if(!isBlank(settings.create[id].performTransition)) {
+        requests.push($.get('/plm/workspace-workflow-transitions', { wsId : settings.create[id].wsId }));
+    }
+
     Promise.all(requests).then(function(responses) {
 
         if(stopPanelContentUpdate(responses[0], settings.create[id])) return;
 
-        let bookmarks = [];
-        let recents   = [];
+        let bookmarks   = [];
+        let recents     = [];
+        let transitions = [];
 
-        if((settings.create[id].picklistShortcuts)) {
-            bookmarks = responses[responses.length - 2].data.bookmarks;
-            recents   = responses[responses.length - 1].data.recentlyViewedItems;
+        for(let response of responses) {
+
+            let url = response.url.split('?')[0];
+
+            switch(url) {
+
+                case '/bookmarks'                     : bookmarks   = response.data.bookmarks;           break;
+                case '/recent'                        : recents     = response.data.recentlyViewedItems; break;
+                case '/workspace-workflow-transitions': transitions = response.data;                     break;
+
+            }
+            
+        }
+
+        if(!isBlank(settings.create[id].performTransition)) {
+            for(let transition of transitions) {
+                if(transition.customLabel === settings.create[id].performTransition) {
+                    settings.create[id].transition = transition.__self__;
+                    break;
+                }
+            }
         }
 
         settings.create[id].sections = responses[0].data;
@@ -695,7 +719,14 @@ function submitCreate(wsIdNew, sections, elemParent, settings, callback) {
                     let result = {};
                     result.link = (settings.getDetails) ? response.data.__self__ : response.data.split('.autodeskplm360.net')[1];
                     result.data = (settings.getDetails) ? response.data : {};
-                    callback(result);
+
+                    if(isBlank(settings.transition)) callback(result);
+                    else {
+                        $.get('/plm/transition', { link : result.link, transition : settings.transition}, function() {
+                            callback(result);
+                        });
+                    }
+                    
                 }
                 
             });
@@ -843,6 +874,7 @@ function getFieldValue(elemField) {
         case 'buom':
         case 'single-select':
             result.value = elemField.find('.picklist-input').first().attr('data-value');
+            result.lookup = { link : result.value }
             break;
 
         case 'multi-select':
@@ -1476,7 +1508,11 @@ function insertDetailsFields(id, sections, fields, data, settings, bookmarks, re
                             for(let wsField of fields) {
                                 if(wsField.urn === sectionField.urn) {
                                     if(fieldValue.fieldId === fieldId) {
-                                        insertHiddenDetailsField(wsField, elemFields, fieldValue);
+                                       
+                                        wsField.visible = true;
+                                        let elemField = insertDetailsField(wsField, data, elemFields, settings, sectionLock, bookmarks, recents, picklistsData);
+                                        // elemField.addClass('hidden');
+                                        // insertHiddenDetailsField(wsField, elemFields, fieldValue);
                                     }
                                 }
                             }
@@ -1667,6 +1703,10 @@ function getAllVisibleSectionsFieldIDs(sections) {
 function insertDetailsField(field, data, elemFields, settings, sectionLock, bookmarks, recents, picklistsData) {
 
     if(!field.visible) return;
+
+    if(isBlank(sectionLock)) sectionLock = false;
+    if(isBlank(bookmarks  )) bookmarks   = false;
+    if(isBlank(recents    )) recents     = false;
 
     if(isBlank(settings)) {
         settings = {
@@ -3210,6 +3250,9 @@ function getFilteredPicklistOptions(elemClicked) {
     });   
 
 }
+
+
+// TODO : REMOVE
 function insertHiddenDetailsField(field, elemFields, fieldValue) {
 
     // insert fields that must not be shown but have predefined values to be set as defined by setting fieldValues
@@ -3499,7 +3542,7 @@ function insertAttachments(link, params) {
                 .addClass('icon-screenshot')
                 .attr('id', id + '-screenshot')
                 .attr('title', settings.attachments[id].uploadScreenshotLabel)
-                .html(settings.attachments[id].uploadScreenshotLabel)
+                
                 .click(function(e) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -3509,7 +3552,11 @@ function insertAttachments(link, params) {
             if(isBlank(settings.attachments[id].uploadScreenshotLabel)) {
                 elemSaveScreenshot.addClass('icon');
             } else {
-                elemSaveScreenshot.addClass('with-icon');
+                if(settings.attachments[id].hideButtonLabels) {
+                    elemSaveScreenshot.addClass('icon');
+                } else {
+                    elemSaveScreenshot.addClass('with-icon').html(settings.attachments[id].uploadScreenshotLabel)
+                }
             }
 
             if($('#' + id + '-screenshot-canvas').length === 0) {
@@ -4002,10 +4049,13 @@ function getFileGrahpic(attachment) {
         case '.PNG':
         case '.tiff':
         case '.png':
-        case '.dwfx':
-            elemGrahpic.append('<img src="' + attachment.thumbnails.small + '">');
+            let thumbnail = attachment.thumbnails.small;
+            if(isBlank(thumbnail)) {
+                let svg = getFileSVG(attachment.type.extension);
+                elemGrahpic.append('<img ng-src="' + svg + '" src="' + svg + '">');
+            } else elemGrahpic.append('<img src="' + attachment.thumbnails.small + '">');
             break;
-
+            
         default:
             let svg = getFileSVG(attachment.type.extension);
             elemGrahpic.append('<img ng-src="' + svg + '" src="' + svg + '">');
@@ -4044,8 +4094,21 @@ function getFileSVG(extension) {
             svg = "data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJhc3NldHMiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMTVweCIgaGVpZ2h0PSIxNXB4IiB2aWV3Ym94PSIwIDAgMTUgMTUiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDE1IDE1IiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBmaWxsPSIjN0I4RkE2IiBkPSJNMSwxaDEzdjExSDFWMXogTTAsMHYxNWgxNVYwSDB6IE0xMCw0LjVDMTAsNS4zLDEwLjcsNiwxMS41LDZDMTIuMyw2LDEzLDUuMywxMyw0LjVDMTMsMy43LDEyLjMsMywxMS41LDMNCglDMTAuNywzLDEwLDMuNywxMCw0LjV6IE0yLDExaDEwTDYsNUwyLDlWMTF6Ii8+PC9zdmc+";
             break;
 
+        case '.dwf':
+        case '.dwfx':
+            svg = 'data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJhc3NldHMiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMTZweCIgaGVpZ2h0PSIxNnB4IiB2aWV3Qm94PSIwIDAgMTYgMTYiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDE2IDE2IiB4bWw6c3BhY2U9InByZXNlcnZlIj48Zz48ZyBpZD0iZmlsZUljb25CR18xXyI+PHBhdGggaWQ9ImZvbGRlZENvcm5lcl8xXyIgZmlsbD0iIzEyNzNDNSIgZD0iTTExLDBsNSw1aC01VjB6Ii8+PHBhdGggaWQ9ImJhY2tncm91bmRfMV8iIGZpbGw9IiMwQzUwODkiIGQ9Ik0wLDB2MTZoMTZWNWgtNVYwSDB6Ii8+PHBhdGggaWQ9IndoaXRlXzFfIiBmaWxsPSIjRkZGRkZGIiBkPSJNMSwxdjhoMTRWNWgtNFYxSDF6Ii8+PHBhdGggaWQ9InNoYWRvd18xXyIgb3BhY2l0eT0iMC4yIiBmaWxsPSIjMUIzRjYzIiBlbmFibGUtYmFja2dyb3VuZD0ibmV3ICAgICIgZD0iTTE2LDEwbC01LTVoNVYxMHoiLz48L2c+PGc+PHBhdGggZmlsbD0iI0ZGRkZGRiIgZD0iTTcuNSwxNWwxLTNsMSwzaDEuMmwxLjMtNWgtMWwtMSwzLjVMOSwxMEg4bC0xLDMuNEw2LDEwSDVsMS4zLDVINy41eiIvPjxwYXRoIGZpbGw9IiNGRkZGRkYiIGQ9Ik0xLDE1aDJjMC40LDAsMiwwLDItMi41QzUsMTAsMy40LDEwLDMsMTBIMVYxNUwxLDE1eiBNMywxMWMwLjMsMCwxLDAsMSwxLjVDNCwxNCwzLjIsMTQsMywxNA0KCQkJYy0wLjIsMC0xLDAtMSwwdi0zQzIsMTEsMi43LDExLDMsMTF6Ii8+PHBhdGggZmlsbD0iI0ZGRkZGRiIgZD0iTTEzLDE1di0yaDJ2LTFoLTJ2LTFoMnYtMWgtM3Y1SDEzTDEzLDE1eiIvPjwvZz48Zz48Y2lyY2xlIGZpbGw9IiMwNTlERDIiIGN4PSI4IiBjeT0iNSIgcj0iMyIvPjxjaXJjbGUgZmlsbD0iIzM3QjlFNSIgY3g9IjkiIGN5PSI0IiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=';
+            break;
+
+        case '.nwd':
+            svg = 'data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJhc3NldHMiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iNzhweCIgaGVpZ2h0PSI5NHB4IiB2aWV3Qm94PSIwIDAgNzggOTQiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDc4IDk0IiB4bWw6c3BhY2U9InByZXNlcnZlIj48Zz48cGF0aCBmaWxsPSIjNzRBMTM3IiBkPSJNMCwwdjk0aDc4VjIwSDU4VjBIMHoiLz48cGF0aCBmaWxsPSIjRkZGRkZGIiBkPSJNNCw1aDU0djE1aDE2djUwSDRWNXoiLz48cGF0aCBmaWxsPSIjODZCQjQwIiBkPSJNNTgsMGwyMCwyMEg1OFYweiIvPjxwYXRoIG9wYWNpdHk9IjAuMiIgZmlsbD0iIzFCM0Y2MyIgZW5hYmxlLWJhY2tncm91bmQ9Im5ldyAgICAiIGQ9Ik01OCwyMGgyMHYyMEw1OCwyMHoiLz48L2c+PGc+PHBvbHlnb24gZmlsbD0iIzc3QUIzMiIgcG9pbnRzPSIzMiwxMyAyMCwxNCAyOS41LDIzLjggMzQsMjAuMyAJIi8+PHBvbHlnb24gZmlsbD0iIzY3OTYyNyIgcG9pbnRzPSIzMiwxMyAzMiwyMy41IDQwLjcsMjggCSIvPjxwb2x5Z29uIGZpbGw9IiMzQjVDMTAiIHBvaW50cz0iNTUsMTMgNDAuNSwyNi4zIDU1LDMzLjUgCSIvPjxwb2x5Z29uIGZpbGw9IiM1Qjg3MjIiIHBvaW50cz0iMzkuOCw0My44IDQ4LjgsMzYgNTUsNTEgNDAuMyw0Ni4zIAkiLz48cG9seWdvbiBmaWxsPSIjNjE4RjIyIiBwb2ludHM9IjM3LDQ4IDQ0LDYyIDU1LDUxLjMgNDAsNDMgCSIvPjxwb2x5Z29uIGZpbGw9IiM3N0FCMzIiIHBvaW50cz0iMzMsNTEuNSAzNyw0OCAzNC41LDM5IDMwLjUsMzkuOCAJIi8+PHBvbHlnb24gZmlsbD0iIzYxOEYyMiIgcG9pbnRzPSIyMCw2MyAzMyw2MyAzMyw1MC44IDI2LjMsNTQuMyAJIi8+PHBvbHlnb24gZmlsbD0iIzU4N0IyQSIgcG9pbnRzPSI1NSw1MSA0NCw2MiA1NSw2MyAJIi8+PHBvbHlnb24gZmlsbD0iIzNCNUMxMCIgcG9pbnRzPSI1NSwzMy41IDQ3LjgsMzguMyA1NSw1MSAJIi8+PHBvbHlnb24gZmlsbD0iIzRBNkUxQSIgcG9pbnRzPSIyMCwxNCA1NSwzMy41IDM3LDQ4IDMyLjUsNDAuNSAzMyw1MS41IDIwLDYzIAkiLz48L2c+PC9zdmc+';
+            break;
+
         case '.rvt':
             svg = 'data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJhc3NldHMiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMTZweCIgaGVpZ2h0PSIxNnB4IiB2aWV3Qm94PSIwIDAgMTYgMTYiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDE2IDE2IiB4bWw6c3BhY2U9InByZXNlcnZlIj48Zz48ZyBpZD0iZmlsZUljb25CR181NV8iPjxwYXRoIGlkPSJmb2xkZWRDb3JuZXJfMTUxXyIgZmlsbD0iIzEyNzNDNSIgZD0iTTExLDBsNSw1aC01VjB6Ii8+PHBhdGggaWQ9ImJhY2tncm91bmRfMTUxXyIgZmlsbD0iIzBDNTA4OSIgZD0iTTAsMHYxNmgxNlY1aC01VjBIMHoiLz48cGF0aCBpZD0id2hpdGVfMTAxXyIgZmlsbD0iI0ZGRkZGRiIgZD0iTTEsMXY4aDE0VjVoLTRWMUgxeiIvPjxwYXRoIGlkPSJzaGFkb3dfMTI2XyIgb3BhY2l0eT0iMC4yIiBmaWxsPSIjMUIzRjYzIiBlbmFibGUtYmFja2dyb3VuZD0ibmV3ICAgICIgZD0iTTE2LDEwbC01LTVoNVYxMHoiLz48L2c+PGc+PHBhdGggZmlsbD0iI0ZGRkZGRiIgZD0iTTMsMTFoMWMwLjMsMCwwLjUsMC4yLDAuNSwwLjVTNC4zLDEyLDQsMTJIM1YxMXogTTIsMTB2NWgxdi0yaDAuN0w1LDE1aDFsLTEuNC0yLjENCgkJCWMwLjUtMC4yLDAuOS0wLjgsMC45LTEuNEM1LjUsMTAuNyw0LjgsMTAsNCwxMEgyeiIvPjxwYXRoIGZpbGw9IiNGRkZGRkYiIGQ9Ik0xMywxMWgxLjN2LTFoLTMuN3YxSDEydjRoMVYxMXoiLz48cGF0aCBmaWxsPSIjRkZGRkZGIiBkPSJNOSwxNWwyLTVoLTFsLTEuNSw0TDcsMTBINmwyLDVIOXoiLz48L2c+PC9nPjwvc3ZnPg==';
+            break;
+
+        case '.zip':
+            svg = 'data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIGlkPSJhc3NldHMiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMTRweCIgaGVpZ2h0PSIxNnB4IiB2aWV3Qm94PSIwIDAgMTQgMTYiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDE0IDE2IiB4bWw6c3BhY2U9InByZXNlcnZlIj48Zz48cGF0aCBmaWxsPSIjN0I4RkE2IiBkPSJNMCwwdjE2aDE0VjVoLTR2M0g4djFoMXYxSDh2MWgxdjFIOHYxaDF2MUg4djFINXYtMWgxdi0xSDV2LTFoMXYtMUg1di0xaDFWOUg1VjhINFYwSDB6Ii8+PHBhdGggZmlsbD0iIzdCOEZBNiIgZD0iTTEwLDB2NGg0TDEwLDB6Ii8+PHBhdGggZmlsbD0iIzdCOEZBNiIgZD0iTTYsNGgydjJINlY0eiBNNSwwdjdoNFYwSDV6Ii8+PC9nPjwvc3ZnPg==';
             break;
 
         default: 
@@ -4186,7 +4249,6 @@ function selectFileForUpload(id) {
 function fileUploadDone(id) {
 
     settings.attachments[id].timestamp = new Date().getTime();
-
     insertAttachmentsData(id, true);
 
 }
@@ -4242,8 +4304,11 @@ function insertGrid(link, params) {
         [ 'hideButtonCreate'    , false ],
         [ 'hideButtonClone'     , false ],
         [ 'hideButtonDisconnect', false ],
-        [ 'hideButtonLabels'    , false ],
         [ 'rotate'              , false ],
+        [ 'sortOrder'           , [] ],
+        [ 'sortBy'              , '' ],
+        [ 'sortDirection'       , 'ascending' ],
+        [ 'sortType'            , 'string' ],
         [ 'bookmark'            , false ],
         [ 'picklistLimit'       , 10    ],
         [ 'picklistShortcuts'   , false ]
@@ -4346,7 +4411,7 @@ function insertGridData(id) {
 
     let params = {
         link      : settings.grid[id].link,
-        timestamp : settings.grid[id].timestamp
+        timestamp : settings.grid[id].timestamp,
     }
 
     let requests    = [
@@ -4363,8 +4428,6 @@ function insertGridData(id) {
     if(settings.grid[id].headerLabel == 'descriptor') requests.push($.get('/plm/details', { link : settings.grid[id].link })); 
 
     Promise.all(requests).then(function(responses) {
-
-        console.log(responses);
 
         if(stopPanelContentUpdate(responses[0], settings.grid[id])) return;
 
@@ -4402,6 +4465,28 @@ function insertGridData(id) {
             }
 
             if(settings.grid[id].tableHeaders) elemTHead.prependTo(elemTable);
+
+            if(!isBlank(settings.grid[id].sortBy)) {
+                for(let row of rows) {
+                    row.sort = getFieldValueFromResponseData(settings.grid[id].sortBy, row.rowData) || '';
+                }
+                if(settings.grid[id].sortType.toLowerCase() === 'integer') {
+                    for(let row of rows) row.sort = Number(row.sort);
+                }
+                sortArray(rows, 'sort', settings.grid[id].sortType, settings.grid[id].sortDirection);
+            }
+
+            if(!isBlank(settings.grid[id].sortOrder)) {
+                for(let sort of settings.grid[id].sortOrder) {
+                    for(let row of rows) {
+                        row.sort = getFieldValueFromResponseData(sort.sortBy, row.rowData) || '';
+                    }
+                    if(sort.sortType.toLowerCase() === 'integer') {
+                        for(let row of rows) row.sort = Number(row.sort);
+                    }
+                    sortArray(rows, 'sort', sort.sortType, sort.sortDirection);
+                }
+            }
 
             if(rows.length > 0 ) {
                 if(!isBlank(settings.grid[id].groupBy)) {
@@ -5128,11 +5213,13 @@ function changeBOMView(id) {
             dataAdditional.push(responses[indexAdditional++]);
         } 
 
-        let responseData = {};
+        let responseData = { bomPartsList : [] } ;
 
         if(settings.bom[id].includeBOMPartList) responseData.bomPartsList = getBOMPartsList(settings.bom[id], responses[0].data)
 
-        changeBOMViewDone(id, settings.bom[id], responses[0].data, selectedItems, dataFlatBOM, dataAdditional);
+        if(selectedItems.length > 0) selectedItems = extendBOMPartsList(settings.bom[id], selectedItems);
+
+        changeBOMViewDone(id, settings.bom[id], responses[0].data, selectedItems, dataFlatBOM, dataAdditional, responseData.bomPartsList);
         finishPanelContentUpdate(id, settings.bom[id], null, null, responseData);
 
     });
@@ -5761,8 +5848,11 @@ function bomDisplayItem(elemItem) {
 }
 function bomDisplayItemByPartNumber(number, select, deselect) {
 
+    if(isBlank(number  )) return;
     if(isBlank(select  )) select   = true;
     if(isBlank(deselect)) deselect = true;
+
+    let proceed = true;
 
     let result = {
         elements : [],
@@ -5771,10 +5861,11 @@ function bomDisplayItemByPartNumber(number, select, deselect) {
 
     $('.bom-item').each(function() {
         if(number === $(this).attr('data-part-number')) {
-            bomDisplayItem($(this));
             result.links.push($(this).attr('data-link'));
             result.elements.push($(this));
             if(select) $(this).addClass('selected');
+            if(proceed) bomDisplayItem($(this));
+            proceed = false;
         } else {
             if(deselect) $(this).removeClass('selected');
         }
@@ -5857,7 +5948,7 @@ function expandBOMParents(level, elem) {
 
 }
 function updateBOMPath(elemClicked) {
-    
+
     let elemBOM  = elemClicked.closest('.bom');
     let id       = elemBOM.attr('id');
     let elemPath = $('#' + id + '-bom-path');
@@ -7005,7 +7096,7 @@ function insertViewer(link, params) {
         $('#' + id + '-message').hide();
     }
 
-    $.get('/plm/get-viewables', { 
+    $.post('/plm/get-viewables', { 
         link          : link, 
         fileId        : fileId, 
         filename      : filename, 
@@ -7017,22 +7108,27 @@ function insertViewer(link, params) {
         if(settings.viewer[id].link      !== response.params.link     ) return;
         if(settings.viewer[id].timeStamp !=  response.params.timeStamp) return;
 
-        
         if(response.data.length > 0) {
             
             sortArray(response.data, 'size', 'integer', 'descending');
             
-            let formats3D  = config.viewer.preferredFileSuffixes || ['.ipt.dwf', '.iam.dwf'];
+            let formats3D  = config.viewer.preferredFileSuffixes || ['.ipt.dwf', '.ipt.dwfx', '.iam.dwf', '.iam.dwfx'];
             let viewables  = [];
             let found3DDWF = false;
 
             for(let viewable of response.data) {
-                if((viewable.type == 'DWF File') && !found3DDWF) {
+                let add = true;
+                if(!found3DDWF){
                     for(let format of formats3D) {
-                        if(viewable.name.toLowerCase().indexOf(format.toLowerCase()) > -1) found3DDWF = true;
+                        if(viewable.name.toLowerCase().indexOf(format.toLowerCase()) > -1) {
+                            found3DDWF = true;
+                            viewables.unshift(viewable);
+                            add = false;
+                            break;
+                        }
                     }
-                    viewables.unshift(viewable);
-                } else viewables.push(viewable);
+                }  
+                if(add) viewables.push(viewable);
             }
 
             $('body').removeClass('no-viewer');
@@ -7398,6 +7494,7 @@ function insertChangeProcesses(link, params) {
         [ 'createContextItems'       , [] ], // ['/api/v3/workspaces/57/items/12345']
         [ 'createContextItemFields'  , [] ], // ['AFFECTED_ITEM']
         [ 'createViewerImageFields'  , [] ], // 'IMAGE_1'
+        [ 'createPerformTransition'  , '' ], // 'SUBMIT'
         [ 'createConnectAffectedItem', true ]
     ]);
 
@@ -7430,6 +7527,7 @@ function insertChangeProcesses(link, params) {
                 contextItems        : settings.processes[id].createContextItems,
                 contextItemFields   : settings.processes[id].createContextItemFields,
                 viewerImageFields   : settings.processes[id].createViewerImageFields,
+                performTransition   : settings.processes[id].createPerformTransition,
                 afterCreation       : function(createId, createLink, data, id) { afterChangeProcessCreation(createId, createLink, id); }
             });
         }).addClass('panel-action-create').addClass('default');
@@ -8452,6 +8550,8 @@ function insertItemSummary(link, params) {
             .addClass('screen');
     } else elemItemTop.html('');
 
+    if(settings.summary[id].hideHeader) elemItemTop.addClass('no-header');
+
     elemItemTop.attr('data-link', settings.summary[id].link)
         .addClass('item')
         .addClass('panel-top')
@@ -8614,11 +8714,17 @@ function setItemSummaryData(id) {
                     elemItemStatus.hide();
                 } else {
 
-                    let stateLabel = responses[0].data.currentState.title;
-                    let stateColor = '#000';
+                    let stateLabel   = responses[0].data.currentState.title;
+                    let stateColor   = '#000';
+                    let statesColors = settings.summary[id].statesColors || settings.summary[id].stateColors;
 
-                    for(let statesColor of settings.summary[id].statesColors) {
-                        if(statesColor.states.indexOf(responses[0].data.currentState.title) > -1) {
+                    for(let statesColor of statesColors) {
+                        if(isBlank(statesColor.states)) {
+                            if(statesColor.state == stateLabel) {
+                                stateColor = statesColor.color;
+                                stateLabel = statesColor.label;
+                            }
+                        } else if (statesColor.states.indexOf(stateLabel) > -1) {
                             if(!isBlank(statesColor.color)) stateColor = statesColor.color;
                             if(!isBlank(statesColor.label)) stateLabel = statesColor.label;
                             break;
@@ -8716,7 +8822,7 @@ function insertItemSummaryContents(id, details, fields, tabs) {
 
         if(isBlank(content.params)) content.params = {};
 
-        let link      = settings.summary[id].link;
+        let link      =  content.link || settings.summary[id].link;
         let contentId = (isBlank(content.params.id)) ? 'item-' + content.type : content.params.id;
         let className = (isBlank(content.className)) ? settings.summary[id].contentSurfaceLevel : content.className;
         let elemTop   = $('#' + contentId);

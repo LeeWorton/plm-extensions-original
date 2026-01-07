@@ -1,8 +1,8 @@
-let urlParameters   = getURLParameters();
-let links           = {};
-let workspaces      = [];
-let messages        = [];
-let embedded        = false;
+let urlParameters    = getURLParameters();
+let links            = {};
+let workspaces       = [];
+let completionEvents = 0;
+
 
 let paramsDetails = {
     headerLabel     : 'descriptor',
@@ -17,23 +17,29 @@ $(document).ready(function() {
 
     appendOverlay(true);
     setUIEvents();
-    setEmbeddedMode();
+    setAddinEvents();
+    setAddinMode();
 
     viewerCacheBoundingBoxes = true;
 
-    getFeatureSettings('assetEditor', [], function() {
+    getFeatureSettings('instances', [], function() {
 
-        workspaces = config.assetEditor.workspaces;
+        workspaces = config.instances.tabs;
         
-        if(urlParameters.wsId != config.assetEditor.workspaceId) {
+        if(urlParameters.wsId != config.instances.assets.workspaceId) {
 
-            insertResults(config.assetEditor.workspaceId, [{
-                field       : config.assetEditor.fieldIdBOM,       
+            insertResults(config.instances.assets.workspaceId, [{
+                field       : config.instances.assets.fieldIdBOM,       
                 type        : 0,
                 comparator  : 3,
-                value       : urlParameters.descriptor
+                value       : urlParameters.number
+                // value       : urlParameters.descriptor
+                // comparator  : 21,
+                // value       : ''
+                // comparator  : 3,
+                // value       : '00'
             }], {
-                headerLabel : config.assetEditor.landingHeader || 'Select Asset',
+                headerLabel : config.instances.landingHeader || 'Select Asset',
                 layout      : 'list',
                 contentSize : 'xs',
                 onClickItem : function(elemClicked) { selectResult(elemClicked); }
@@ -65,7 +71,7 @@ function openEditor(link) {
         $('#header-subtitle').html(urlParameters.title);
         $('#overlay').hide();
 
-        links.ebom = getSectionFieldValue(responses[0].data.sections, config.assetEditor.fieldIdBOM, '', 'link');
+        links.ebom = getSectionFieldValue(responses[0].data.sections, config.instances.assets.fieldIdBOM, '', 'link');
 
         insertDetails(links.ebom, paramsDetails);
 
@@ -78,7 +84,7 @@ function openEditor(link) {
             toggles             : true,
             viewerSelection     : false,
             includeBOMPartList  : true,
-            bomViewName         : config.assetEditor.bomViewName,
+            bomViewName         : config.instances.bomViewName,
             fieldsIn            : ['Quantity', 'Qty'],
             contentSize         : 'm',
             afterCompletion     : function(id, data) { afterBOMCompletion(id, data) },
@@ -94,11 +100,76 @@ function openEditor(link) {
                 workspace.index   = index - 1;
         }
 
-        console.log(workspaces);
-
         $('#excel-export').removeClass('disabled');
 
     });
+
+}
+function onViewerLoadingDone() {
+
+    completionEvents++;
+
+    setGridSyncStatus();
+
+}
+function setGridSyncStatus() {
+
+    if(completionEvents <= workspaces.length) return;
+
+    let index = 0;
+
+    for(let workspace of workspaces) {
+
+        let elemTHead       = $('#table-' + index + '-thead');
+        let elemTHRow       = elemTHead.children().first();
+        let elemTBody       = $('#table-' + index + '-tbody');
+        let viewerInstances = [];
+
+        elemTBody.children().each(function() {
+
+            let elemRow = $(this);
+
+            if(elemRow.hasClass('table-group')) {
+
+                let elemCellGroup = elemRow.children().first(); 
+                    elemCellGroup.attr('colspan', elemTHRow.children().length);
+
+                let partNumber  = elemCellGroup.html();
+                viewerInstances = viewerGetComponentsInstances([partNumber])[0].instances;
+
+            } else {
+                
+                let instanceId  = elemRow.find('.field-id-INSTANCE_ID').children().first().val();
+                let boundingBox = elemRow.find('.field-id-INSTANCE_BOUNDING_BOX').children().first().val();
+                let elemCell    = $('<td></td>').insertAfter(elemRow.children().first()).addClass('sync-status').addClass('match');;
+                let elemIcon    = $('<div></div>').appendTo(elemCell).addClass('icon').addClass('filled');
+                let statusIcon  = 'icon-remove';
+                let statusTitle = 'No matching instance';
+
+                for(let viewerInstance of viewerInstances) {
+                    if(viewerInstance.instanceId == instanceId) {
+                        
+                        if(JSON.stringify(viewerInstance.boundingBox) === boundingBox) {
+                            statusIcon  = 'icon-check';
+                            statusTitle = 'Found matching instance ID at right position';
+                        } else {
+                            statusIcon  = 'icon-info';
+                            statusTitle = 'Found matching instance ID at different position';
+                        }
+                        break;
+                    }
+                }
+
+                elemCell.attr('title', statusTitle);
+                elemIcon.addClass(statusIcon);
+
+            }
+
+        });
+
+        index++;
+
+    }
 
 }
 
@@ -131,11 +202,11 @@ function setUIEvents() {
         }
 
         $.post('/plm/excel-export', {
-            fileName   : config.assetEditor.exportFileName + ' ' + urlParameters.title.split(' - ')[0] + '.xlsx',
+            fileName   : config.instances.exportFileName + ' ' + urlParameters.title.split(' - ')[0] + '.xlsx',
             sheets     : sheets
         }, function(response) {
             $('#overlay').hide();
-            let url = document.location.href.split('/asset-editor')[0] + '/' + response.data.fileUrl;
+            let url = document.location.href.split('/instances')[0] + '/' + response.data.fileUrl;
             document.getElementById('frame-download').src = url;
         });
         
@@ -160,55 +231,76 @@ function setUIEvents() {
 
 
 // Enable embedded mode to support usage as addin
-function setEmbeddedMode() {
+function setAddinMode() {
 
-    if(typeof chrome !== 'undefined') {
-        if(typeof chrome.webview !== 'undefined') {
+    if(!isAddin) return;
 
-            embedded = true;
+    console.log('setAddinMode START');
+    console.log('isAddin : ' + isAddin);
+
+
+
+    // $('#header').addClass('hidden');
+    // $('.screen').css('top', '0px');
+
+    $('body').addClass('is-addin');
+    // $('#bom').addClass('hidden');
+    // $('#toggle-layout').remove();
+    // $('#toggle-bom').remove();
+    // $('#toggle-details').remove();    
+
+    //selectInstance('002771.iam|Build Assembly:1|94500A231:6');
+
+    // if(typeof chrome !== 'undefined') {
+    //     if(typeof chrome.webview !== 'undefined') {
+
+    //         embedded = true;
+
+    //         console.log('setEmbeddedMode : adding Event Listener');
             
-            chrome.webview.addEventListener('message', arg => { 
+    //         window.chrome.webview.addEventListener('message', arg => { 
 
-                // 'response:title:text'
-                // 'selectInstance:instanceId'
+    //             console.log('---------------------------------------------------');
+    //             console.log('Received message from Inventor');
 
-                let response      = arg.data.split(':');
-                let messageType   = response[0];
+    //             // 'response:title:text'
+    //             // 'selectInstance:partNumber:instanceId'
+    //             // selectInstance:94500A231:002771.iam|Build Assembly: 1|94500A231:1
+    //             // selectComponent:94500A231
 
-                $('#overlay').hide();
+    //             $('#overlay').hide();
 
-                switch(messageType) {
+    //             switch(messageType) {
 
-                    case 'response': 
-                        let messageTitle = response[1];
-                        let messageText  = (response.length > 2) ? response[2] : 'Please contact your administrator';
-                        if(messageTitle != 'success') showErrorMessage(messageTitle, messageText);
-                        break;
+    //                 case 'response': 
+    //                     let messageTitle = response[1];
+    //                     let messageText  = (response.length > 2) ? response[2] : 'Please contact your administrator';
+    //                     if(messageTitle != 'success') showErrorMessage(messageTitle, messageText);
+    //                     break;
 
-                    case 'selectInstance':
-                        let instanceId = (response.length > 1) ? response[1] : '';
-                        selectInstance(instanceId);
-                        break;
+    //                 case 'selectInstance':
+    //                     let instanceId = (response.length > 2) ? response[2] : '';
+    //                     selectInstance(instanceId);
+    //                     break;
 
-                    default: break;
+    //                 case 'selectComponent':
+    //                     let partNumber = (response.length > 1) ? response[1] : '';
+    //                     selectComponent(partNumber);
+    //                     break;
 
-                }
+    //                 default: break;
 
-            });
+    //             }
 
-        }
-    }
+    //         });
 
-    console.log('embedded : ' + embedded);
+    //     }
+    // }
+
+    
     // embedded = true;
 
-    if(embedded) {
-        $('body').addClass('embedded');
-        $('#bom').addClass('hidden');
-        $('#toggle-layout').remove();
-        $('#toggle-bom').remove();
-        $('#toggle-details').remove();
-    }
+
 
 }
 
@@ -350,6 +442,8 @@ function insertTabContents() {
     for(let workspace of workspaces) {
 
         if(!isBlank(workspace.link)) {
+
+            // workspace.fieldsIn.push('NR');
             
             insertGrid(workspace.link, {
                 id                : 'table-' + index++,
@@ -365,11 +459,12 @@ function insertTabContents() {
                 hideButtonCreate  : true,
                 hideButtonClone   : true,
                 singleToolbar     : 'actions',
+                sortOrder         : workspace.sortOrder,
                 fieldsIn          : workspace.fieldsIn,
                 fieldsEx          : workspace.fieldsEx,
                 groupBy           : workspace.groupBy || '',
                 collapseContents  : workspace.collapseContents || false,
-                textNoData        : 'No items found. Use the EBOM sync to update this table.',
+                textNoData        : 'No items found. Use the button Snyc with BOM in the main toolbar to update this table.',
                 contentSizes      : ['s', 'xs', 'xxs', 'xxl', 'xl', 'l', 'm'],
                 afterCompletion   : function(id) { afterGridCompletion(id); },
                 // onClickItem       : function(elemClicked) { onSelectGridItem(elemClicked); }
@@ -514,6 +609,9 @@ function onSelectBOMItem(elemClicked) {
 
     let selected = $('#bom-tbody').find('tr.selected').length;
 
+    $('#items').find('.highlighted').removeClass('highlighted');
+    $('#items').find('.selected'   ).removeClass('selected'   );
+
     if(selected === 0) {
 
         $('#items').find('tr.content-item').removeClass('hidden');
@@ -529,21 +627,26 @@ function onSelectBOMItem(elemClicked) {
         let partNumber = elemClicked.attr('data-part-number');
         let index     = 0;
 
+        $('.table-group').removeClass('keep');
+
         for(let workspace of workspaces) {
 
             let elemGrid = $('#table-' + index++ + '-tbody');
 
             elemGrid.find('tr.content-item').each(function() {
 
-                let elemRow = $(this);
-                let gridRow = getGridRowDetails(elemRow, workspace.fieldsList);
+                let elemRow   = $(this);
+                let gridRow   = getGridRowDetails(elemRow, workspace.fieldsList);
+                let elemGroup = elemRow.prevAll('.table-group').first();
 
                 if(gridRow.path.indexOf(path.string) < 0) {
                     elemRow.addClass('hidden');
-                    elemRow.prev('.table-group').addClass('hidden');
+                    // elemRow.prev('.table-group').addClass('hidden');
+                    if(!elemGroup.hasClass('keep')) elemGroup.addClass('hidden');
                 } else {
                     elemRow.removeClass('hidden');
-                    elemRow.prev('.table-group').removeClass('hidden');
+                    // elemRow.prev('.table-group').removeClass('hidden');
+                    elemGroup.removeClass('hidden').addClass('keep');
                 }
 
             });
@@ -561,13 +664,21 @@ function onSelectBOMItem(elemClicked) {
 // Highlight viewer instances upon selection of item in tabs
 function afterGridCompletion(id) {
 
-    let elemTable  = $('#' + id);
-    let elemTHead  = $('#' + id + '-thead');
-    let elemTHRow  = elemTHead.children().first();
-    let elemTBody  = $('#' + id + '-tbody');
+    completionEvents++;
 
-    let partNumber       = '';
-    let viewerInstances  = [];
+    let elemTable   = $('#' + id);
+    let elemActions = $('#' + id + '-actions');
+    let elemTHead   = $('#' + id + '-thead');
+    let elemTHRow   = elemTHead.children().first();
+
+    $('<div></div>').prependTo(elemActions)
+        .addClass('button')
+        .addClass('with-toggle')
+        .addClass('toggle-isolate')
+        .html('Isolate')
+        .click(function() {
+            $(this).toggleClass('toggle-on').toggleClass('toggle-off');
+        });
 
     elemTable.find('input').click(function() {
         selectGridItem($(this).closest('tr'));
@@ -577,95 +688,52 @@ function afterGridCompletion(id) {
         .addClass('sync-status')
         .html('');
 
-
-    elemTBody.children().each(function() {
-
-        let elemRow = $(this);
-
-        if(elemRow.hasClass('table-group')) {
-
-            let elemCellGroup = elemRow.children().first(); 
-                elemCellGroup.attr('colspan', elemTHRow.children().length);
-
-            partNumber      = elemCellGroup.html();
-            viewerInstances = viewerGetComponentsInstances([partNumber])[0].instances;
-
-        } else {
-            
-            let instanceId  = elemRow.find('.field-id-INSTANCE_ID').children().first().val();
-            let boundingBox = elemRow.find('.field-id-INSTANCE_BOUNDING_BOX').children().first().val();
-            let elemCell    = $('<td></td>').insertAfter(elemRow.children().first()).addClass('sync-status').addClass('match');;
-            let elemIcon    = $('<div></div>').appendTo(elemCell).addClass('icon').addClass('filled');
-            let statusIcon  = 'icon-remove';
-            let statusTitle = 'No matching instance';
-
-            for(let viewerInstance of viewerInstances) {
-                if(viewerInstance.instanceId == instanceId) {
-                    
-                    if(JSON.stringify(viewerInstance.boundingBox) === boundingBox) {
-                        statusIcon  = 'icon-check';
-                        statusTitle = 'Found matching instance ID at right position';
-                    } else {
-                        statusIcon  = 'icon-info';
-                        statusTitle = 'Found matching instance ID at different position';
-                    }
-                    break;
-                }
-            }
-
-            elemCell.attr('title', statusTitle);
-            elemIcon.addClass(statusIcon);
-
-        }
-
-    });
+    setGridSyncStatus();
 
 }
 function selectGridItem(elemClicked) {
 
-    let isSelected = elemClicked.hasClass('highlighted');
     let elemPanel  = elemClicked.closest('.panel-top');
     let index      = elemPanel.index();
     let rowData    = getGridRowDetails(elemClicked, workspaces[index].fieldsList);
 
-    // console.log(rowData);
-    // console.log(isSelected);
-
     $('.highlighted').removeClass('highlighted');
 
-    if(isSelected) {
+    // if(isSelected) {
 
-        viewerResetSelection();
+        // viewerResetSelection();
 
-    } else {
+    // } else {
+
+        let elemToggleIsolate = elemPanel.find('.toggle-isolate');
+        let addinAction       = 'selectInstance';
+
+        if(elemToggleIsolate.length > 0) {
+            if(elemToggleIsolate.hasClass('toggle-on')) {
+                addinAction = 'isolateInstance';
+            }
+        }
 
         elemClicked.addClass('highlighted');
 
-        viewerHighlightInstances(rowData.partNumber, [], [rowData.instanceId], {});
-
-        if(embedded) {
-            console.log('post Message to ' + host);
+        if(isAddin && sendAddinMessage) {
+            console.log('addin message to ' + host);
             console.log(rowData);
-            let selection = 'plm-item;' + rowData.partNumber + ';' + '--' + ';' + elemClicked.attr('data-link')+ ';' + rowData.instanceId;
+            let selection = 'plm-item;' + rowData.partNumber + ';' + '--' + ';' + elemClicked.attr('data-link')+ ';' + rowData.instancePath;
             console.log(selection);
-            $('#overlay').show();
-            chrome.webview.postMessage("selectInstance:"  + getNewAddinMessageID(elemClicked) + selection.toString()); 
-        } else bomDisplayItemByPath(rowData.path);
+            console.log("addin message = " +  addinAction + ":" + selection.toString());
+            // $('#overlay').show();
+            window.chrome.webview.postMessage(addinAction + ":" + selection.toString()); 
+        } else {
+            bomDisplayItemByPath(rowData.path);
+        }
+
+        viewerHighlightInstances(rowData.partNumber, [], [rowData.instancePath], {});
 
         elemClicked.prevUntil('.table-group').each(function() { $(this).addClass('related'); })
         elemClicked.nextUntil('.table-group').each(function() { $(this).addClass('related'); })
 
-    }
-
-}
-function getNewAddinMessageID(elements) {
-
-    let now = new Date();
-    let id  = now.getTime();
-    
-    messages.push({ id : id, elements : elements });
-
-    return id + ';';
+    // }
 
 }
 
@@ -687,7 +755,7 @@ function selectInstance(instanceId) {
             let value     = elemInput.val();
 
             if(value === instanceId) {
-                selectGridItem(elemInput.closest('tr'));
+                selectGridItem(elemInput.closest('tr'), );
                 $('#tabs').children().eq(workspace.index).click();
                 return;
             }
@@ -695,6 +763,8 @@ function selectInstance(instanceId) {
         });
             
     }
+
+    sendAddinMessage = true;
 
 }
 
@@ -781,15 +851,13 @@ function syncItemsList() {
 
             let viewerInstances = viewerGetComponentsInstances([item.partNumber])[0];
 
-            console.log(viewerInstances);
-
             for(let viewerInstance of viewerInstances.instances) {
                 if(viewerInstance.pathNumbers === item.path) {
                     item.instances.push(viewerInstance);
+                } else if(viewerInstance.path === item.path) {
+                    item.instances.push(viewerInstance);
                 }
             } 
-
-            console.log(item);
 
         }     
 
@@ -800,7 +868,7 @@ function syncItemsList() {
                     if(item.path === gridRow.path) {
                         let index = 0;
                         for(let instance of item.instances) {
-                            if(instance.instanceId == gridRow.instanceId) {
+                            if(instance.instancePath == gridRow.instancePath) {
                                 item.instances.splice(index, 1);
                                 break;
                             }
@@ -816,14 +884,15 @@ function syncItemsList() {
                     wsId : workspace.workspaceId,
                     link : workspace.link,
                     data : [
-                        { fieldId : workspace.fieldsList.partNumber , value : item.partNumber      },
-                        { fieldId : workspace.fieldsList.path       , value : item.path            },
-                        { fieldId : workspace.fieldsList.instanceId , value : instance.instanceId  },
-                        { fieldId : workspace.fieldsList.boundingBox, value : JSON.stringify(instance.boundingBox) }
+                        { fieldId : workspace.fieldsList.partNumber   , value : item.partNumber       },
+                        { fieldId : workspace.fieldsList.title        , value : item.details.TITLE    },
+                        { fieldId : workspace.fieldsList.revision     , value : item.details.REVISION },
+                        { fieldId : workspace.fieldsList.path         , value : item.path             },
+                        { fieldId : workspace.fieldsList.instanceId   , value : instance.instanceId   },
+                        { fieldId : workspace.fieldsList.instancePath , value : instance.instancePath },
+                        { fieldId : workspace.fieldsList.boundingBox  , value : JSON.stringify(instance.boundingBox) }
                     ]
                 }
-
-                console.log(params);
 
                 requests.push($.post('/plm/add-grid-row', params));
                 refresh = true;
@@ -838,6 +907,7 @@ function syncItemsList() {
     }
 
     Promise.all(requests).then(function(responses) {
+        printResponsesErrorMessagesToConsole(responses);
         for(let grid of grids) {
             settings.grid['table-' + grid].load();
         }
@@ -865,9 +935,9 @@ function getGridRows(index) {
 function getGridRowDetails(elemRow, columns) {
 
     let gridRow  =  {
-        partNumber : '',
-        path       : '',
-        instanceId : ''
+        partNumber   : '',
+        path         : '',
+        instancePath : ''
     }
 
     elemRow.children().each(function() {
@@ -887,8 +957,8 @@ function getGridRowDetails(elemRow, columns) {
                     gridRow.path = elemCell.children().first().val();
                     break;
 
-                case columns.instanceId:
-                    gridRow.instanceId = elemCell.children().first().val();
+                case columns.instancePath:
+                    gridRow.instancePath = elemCell.children().first().val();
                     break;
 
             }

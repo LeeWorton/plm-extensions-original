@@ -4,11 +4,12 @@ let now                 = new Date();
 let bomItems            = [];
 let editableFields      = [];
 let indexSelected       = -1;
-let wsItems             = { id : wsId, sections : [], fields : [], viewId : '' };
-let wsProblemReports    = { id : ''  , sections : [], fields : [] };
-let wsSupplierPackages  = { id : ''  , sections : [], fields : [] };
+let wsItems             = { id : '', sections : [], fields : [], viewId : '' };
+let wsProblemReports    = { id : '', sections : [], fields : [] };
+let wsSupplierPackages  = { id : '', sections : [], fields : [] };
 let kpis                = [];
 let rollUpFields        = [];
+let urlParameters       = getURLParameters();
 
 let paramsDetails = { 
     bookmark        : true,
@@ -29,29 +30,30 @@ let paramsAttachments = {
     singleToolbar : 'controls'
 }
 let paramsProcesses = { 
-    headerLabel         : 'Processes', 
-    filterByWorkspace   : true,
-    openInPLM           : true,
-    reload              : false,
-    editable            : true,
-    openOnDblClick      : true,
-    createWSID          : '' ,
-    fieldIdMarkup       : ''
+    headerLabel       : 'Processes', 
+    filterByWorkspace : true,
+    openInPLM         : true,
+    reload            : false,
+    editable          : true,
+    openOnDblClick    : true,
+    createWSID        : '' ,
+    fieldIdMarkup     : ''
 }
 let context = {}
  
 
 $(document).ready(function() {
     
-    wsProblemReports.id             = config.problemReports.wsId;
-    wsSupplierPackages.id           = config.explorer.wsIdSupplierPackages;
-    paramsProcesses.createWSID      = config.problemReports.wsId;
-    paramsProcesses.fieldIdMarkup   = config.explorer.fieldIdPRImage;
-    rollUpFields                    = config.explorer.rollUpFields;
-    paramsProcesses.createContext   = { fieldId : config.explorer.fieldIdPRContext };
+    wsProblemReports.id           = config.problemReports.wsId;
+    wsSupplierPackages.id         = config.explorer.wsIdSupplierPackages;
+    paramsProcesses.createWSID    = config.problemReports.wsId;
+    paramsProcesses.fieldIdMarkup = config.explorer.fieldIdPRImage;
+    rollUpFields                  = config.explorer.rollUpFields;
+    paramsProcesses.createContext = { fieldId : config.explorer.fieldIdPRContext };
+    urlParameters.bom             = urlParameters.link;
 
-    let link = '/api/v3/workspaces/' + wsId + '/items/' + dmsId;
-    
+    let requests = [];
+
     appendProcessing('dashboard', false);
     appendProcessing('bom', false);
     appendProcessing('details', false);
@@ -59,9 +61,18 @@ $(document).ready(function() {
     appendOverlay(false);
     insertMenu();
 
-    if(isBlank(wsItems.id)) wsItems.id = config.items.wsId;
-
-    getFeatureSettings('explorer', [], function(responses) {
+    if(!isBlank(urlParameters.fieldidebom)) requests.push($.get('/plm/details', { link : urlParameters.link}));
+    
+    getFeatureSettings('explorer', requests, function(responses) {
+        
+        if(!isBlank(urlParameters.fieldidebom)) {
+            urlParameters.bom = getSectionFieldValue(responses[0].data.sections, urlParameters.fieldidebom, '');
+            wsItems.id = urlParameters.bom.split('/')[4];
+        } else if(isBlank(urlParameters.wsid)) {
+            wsItems.id = config.items.wsId;
+        } else {
+            wsItems.id = urlParameters.wsid;
+        }
 
         insertRecentItems({
             headerLabel  : 'Recently Viewed',
@@ -87,6 +98,8 @@ $(document).ready(function() {
             headerLabel : 'Items Workspace',
             number      : true,
             search      : true,
+            pagination  : true,
+            limit       : 50,
             onClickItem : function(elemClicked) { openSelectedItem(elemClicked); },
             tableColumnsLimit : 10
         });
@@ -104,8 +117,8 @@ $(document).ready(function() {
             $('#overlay').hide();
             $('body').removeClass('screen-startup');
 
-            if(!isBlank(dmsId)) {
-                openItem(link);
+            if(!isBlank(urlParameters.dmsid)) {
+                openItem(urlParameters.bom);
             } else {
                 $('body').addClass('screen-landing');
             }
@@ -253,12 +266,12 @@ function setUIEvents() {
 function getInitialData(callback) {
 
     let requests = [
-        $.get('/plm/bom-views-and-fields'   , { wsId : wsItems.id, useCache : false }),
-        $.get('/plm/details'                , { wsId : wsItems.id, dmsId : dmsId }),
-        $.get('/plm/sections'               , { wsId : wsItems.id, useCache : true }),
-        $.get('/plm/fields'                 , { wsId : wsItems.id, useCache : true }),
-        $.get('/plm/sections'               , { wsId : wsProblemReports.id, useCache : true }),
-        $.get('/plm/fields'                 , { wsId : wsProblemReports.id, useCache : true })
+        $.get('/plm/bom-views-and-fields' , { wsId : wsItems.id, useCache : true }),
+        $.get('/plm/details'              , { link : urlParameters.bom }),
+        $.get('/plm/sections'             , { wsId : wsItems.id, useCache : true }),
+        $.get('/plm/fields'               , { wsId : wsItems.id, useCache : true }),
+        $.get('/plm/sections'             , { wsId : wsProblemReports.id, useCache : true }),
+        $.get('/plm/fields'               , { wsId : wsProblemReports.id, useCache : true })
     ];
 
     if(!isBlank(config.explorer.wsIdSupplierPackages)) {
@@ -277,11 +290,12 @@ function getInitialData(callback) {
 
         if(wsItems.viewId === '') showErrorMessage('Error in configuration. Could not find BOM view "' + config.explorer.bomViewName + '"');
 
-        wsItems.sections            = responses[2].data;
-        wsItems.fields              = responses[3].data;
-        wsProblemReports.sections   = responses[4].data;
-        wsProblemReports.fields     = responses[5].data;
-        editableFields              = getEditableFields(wsItems.fields);
+        wsItems.sections          = responses[2].data;
+        wsItems.fields            = responses[3].data;
+        wsProblemReports.sections = responses[4].data;
+        wsProblemReports.fields   = responses[5].data;
+        // editableFields            = getEditableFields(wsItems.fields);
+        editableFields = [];
 
         if(!isBlank(config.explorer.wsIdSupplierPackages)) {
             wsSupplierPackages.sections = responses[6].data;
@@ -433,7 +447,12 @@ function getBOMData(link, revBias) {
 
     let promises = [
         $.get('/plm/bom'     , params),
-        $.get('/plm/bom-flat', params)
+        // $.get('/plm/bom-flat', {
+        //      link          : link,
+        // depth         : 1,
+        // revisionBias  : revBias,
+        // viewId        : wsItems.viewId       
+        // })
     ];
 
     Promise.all(promises).then(function(responses) {
@@ -456,7 +475,8 @@ function getBOMData(link, revBias) {
         $('#dashboard-processing').hide();
         $('#bom-processing').hide();
         setFlatBOMHeader();
-        setBOMData(responses[0].data, responses[1].data);
+        // setBOMData(responses[0].data, responses[1].data);
+        setBOMData(responses[0].data, null);
 
     });
 
@@ -527,7 +547,7 @@ function setBOMData(bom, flatBom) {
         let elemHead = $('<tr></tr>').appendTo($('#bom-table-tree'));
 
         $('<th></th>').appendTo(elemHead).addClass('bom-color');
-        $('<th></th>').appendTo(elemHead).addClass('bom-first-col');
+        $('<th></th>').appendTo(elemHead).addClass('bom-first-col').addClass('tree-first-col');
 
         for(let rollUp of urns.rollUps) {
 
@@ -540,8 +560,9 @@ function setBOMData(bom, flatBom) {
 
     }
 
+    // insertNextBOMLevel(bom, elemRoot, bom.root, null, rollUpValues);
     insertNextBOMLevel(bom, elemRoot, bom.root, flatBom, rollUpValues);
-    insertFlatBOM(flatBom);
+    // insertFlatBOM(flatBom);
 
     for(let kpi of kpis) insertKPI(kpi);
 
@@ -639,9 +660,11 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom, parentRollUps) {
             $('<td></td>').appendTo(elemRow).addClass('bom-color');
 
             let elemCell = $('<td></td>').appendTo(elemRow)
-                .addClass('bom-first-col');
+                .addClass('bom-first-col')
+                .addClass('tree-first-col');
 
             $('<span></span>').appendTo(elemCell)
+                .addClass('tree-number')
                 .addClass('bom-number')
                 .html(edge.depth + '.' + edge.itemNumber);
 
@@ -690,11 +713,11 @@ function insertNextBOMLevel(bom, elemRoot, parent, flatBom, parentRollUps) {
                 
                 if(hasChildren) {
 
-                    let elemNav = $('<span></span>');
-                        elemNav.addClass('bom-nav');
-                        elemNav.addClass('icon');
-                        elemNav.addClass('expanded');
-                        elemNav.prependTo(elemCell);
+                    $('<span></span>').prependTo(elemCell)
+                        .addClass('tree-nav')
+                        .addClass('bom-nav')
+                        .addClass('icon')
+                        .addClass('expanded');
 
                     elemRow.addClass('node');
 

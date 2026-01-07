@@ -143,8 +143,10 @@ function initEditor(responses) {
 
     $('#header-subtitle').html(responses[0].data.title);
 
-    links.sourceBOM = getSectionFieldValue(responses[0].data.sections, config.sbom.sourceBOM.fieldId, '', 'link');
+    links.sourceBOM = urlParameters.link;
     links.targetBOM = getSectionFieldValue(responses[0].data.sections, config.sbom.targetBOM.fieldId, '', 'link');
+
+    if(config.sbom.sourceBOM.fieldId !== '') links.sourceBOM = getSectionFieldValue(responses[0].data.sections, config.sbom.sourceBOM.fieldId, '', 'link');
 
     wsConfigItems.fieldIds         = config.sbom.itemsFieldIds;
     wsConfigItems.sections         = responses[3].data;
@@ -239,7 +241,12 @@ function initEditor(responses) {
                 .addClass('items-list')
                 .addClass('tiles')
                 .addClass('list')
-                .addClass('xs');
+                .addClass('xs')
+                .attr('data-link', bomType.linkRoot)
+                .attr('ondragenter', 'dragEnterList(event)'   )
+                .attr('ondragover' , 'dragEnterList(event)'   )
+                .attr('ondragleave', 'dragLeaveHandler(event)')
+                .attr('ondrop'     , 'dropHandler(event)'     );  
 
         }
 
@@ -281,7 +288,7 @@ function initEditor(responses) {
             includeBOMPartList : true,
             headerLabel        : config.sbom.sourceBOM.headerLabel,
             hideHeaderLabel    : (config.sbom.sourceBOM.headerLabel === ''),
-            contentSize        : 'l',
+            contentSize        : 's',
             fieldsIn           : ['Quantity'],
             bomViewName        : config.sbom.sourceBOM.bomViewName,
             onClickItem        : function(elemClicked) { insertDetails(elemClicked.attr('data-link'), paramsDetails); },
@@ -294,7 +301,7 @@ function initEditor(responses) {
             }
         }); 
 
-        }
+    }
     
     createTargetBOM(responses[0].data, responses[2].data, function() {
         getTargetBOM();
@@ -306,8 +313,11 @@ function createTargetBOM(contextDetails, contextSections, callback) {
     if(isBlank(links.targetBOM)) {
 
         let params = {
-            wsId      : config.items.wsId,
-            sections  : []
+            wsId     : config.items.wsId,
+            sections : wsConfigItems.sections,
+            fields   : [
+                { fieldId : wsConfigItems.fieldIds.type , value : { link : wsConfigItems.linkTypeTargetBOM }}
+            ]
         };
         
         if(!isBlank(links.sourceBOM)) {
@@ -318,8 +328,6 @@ function createTargetBOM(contextDetails, contextSections, callback) {
                 setTargetBOMDefaults(params, contextDetails, response.data, config.sbom.targetBOM.defaults.title      , wsConfigItems.fieldIds.title      );
                 setTargetBOMDefaults(params, contextDetails, response.data, config.sbom.targetBOM.defaults.description, wsConfigItems.fieldIds.description);
 
-                addFieldToPayload(params.sections, wsConfigItems.sections, null, wsConfigItems.fieldIds.type , { link : wsConfigItems.linkTypeTargetBOM } );
-
                 $.post({
                     url         : '/plm/create', 
                     contentType : 'application/json',
@@ -327,6 +335,7 @@ function createTargetBOM(contextDetails, contextSections, callback) {
                 }, function(response) {
                     if(response.error) {
                         showErrorMessage('Error', 'Error while creating Target BOM root item, the editor cannot be used at this time. Please review your server configuration.');
+                        printResponseErrorMessagesToConsole(response);
                     } else {
                         links.targetBOM = response.data.split('.autodeskplm360.net')[1];
                         storeTargetBOMLink(contextSections);
@@ -350,7 +359,7 @@ function setTargetBOMDefaults(params, contextDetails, bomDetails, defaults, fiel
     let baseValue   = getSectionFieldValue(baseDetails.sections, copyFrom[1], '');
     let newValue    = defaults.prefix + baseValue + defaults.suffix;
 
-    if(!isBlank(newValue)) addFieldToPayload(params.sections, wsConfigItems.sections, null, fieldId, newValue);
+    if(!isBlank(newValue)) params.fields.push({fieldId : fieldId, value : newValue});
 
 }
 function storeTargetBOMLink(contextSections) {
@@ -421,11 +430,7 @@ function getTargetBOM() {
 
                 case 'list':
                     if(level === 1) {
-                        bomType.elemContent.attr('data-link', bomType.linkRoot)
-                            .attr('ondragenter', 'dragEnterList(event)'   )
-                            .attr('ondragover' , 'dragEnterList(event)'   )
-                            .attr('ondragleave', 'dragLeaveHandler(event)')
-                            .attr('ondrop'     , 'dropHandler(event)'     );  
+                        bomType.elemContent.attr('data-link', bomType.linkRoot);
                     } else if(level === 2) insertItem(bomType.elemContent, part);
                     break;
 
@@ -1434,10 +1439,6 @@ function renameItems(action) {
                 let title = elemItem.find('.node-title').first().val();
 
                 addFieldToPayload(params.sections, wsConfigItems.sections, null, wsConfigItems.fieldIds.title, title);
-
-                console.log(wsConfigItems);
-                console.log(title);
-                console.log(params);
 
                 requests.push($.post('/plm/edit', params));
                 elemItem.removeClass(action.className);
