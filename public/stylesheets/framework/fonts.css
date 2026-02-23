@@ -265,6 +265,7 @@
 .icon-expand::before            { content : '\e5cc'; }
 .icon-factory::before           { content : '\ebbc'; }
 .icon-flag::before              { content : '\f40f'; }
+.icon-flag-finish::before       { content : '\f06e'; }
 .icon-file::before              { content : '\e66d'; }
 .icon-filter::before            { content : '\e152'; }
 .icon-filter-empty::before      { content : '\f703'; }
