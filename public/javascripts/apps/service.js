@@ -1,7 +1,8 @@
 let fields, sections, bomViewIdItems;
 let workspaceIds = {};
-let links = {};
-let urns  = {
+let links        = {};
+let user         = {};
+let urns         = {
     thumbnail     : '', 
     partNumber    : '', 
     title         : '', 
@@ -52,14 +53,14 @@ $(document).ready(function() {
     }
     
     let requests = [ 
-        $.get('/plm/me', { useCache : false }),
+        $.get('/plm/me', { useCache : true }),
         $.get('/plm/sections', { wsId : workspaceIds.sparePartsRequests, useCache : true }),
         $.get('/plm/bom-view-by-name', { wsId : common.workspaceIds.items, name : config.items.bomViewName, useCache : true })
     ];
 
     getFeatureSettings('service', requests, function(responses) {
 
-        let user = responses[0].data;
+        user           = responses[0].data;
         bomViewIdItems = responses[2].data.id;
 
         $('#request-name'   ).val(user.displayName || '');
@@ -88,10 +89,14 @@ $(document).ready(function() {
         paramsDocumentation.hideHeader = true;
         
         setUIElements();
-        setLandingPage(user.displayName);
-        setUIEvents();      
+        setUIEvents();   
+        
+        console.log(urlParameters);
+        console.log(user);
 
         if(urlParameters.link !== '') {
+
+            $('body').addClass('screen-main').removeClass('screen-landing').removeClass('screen-request');
 
             if(urlParameters.wsidcontext == workspaceIds.assets) {
                 let link = '/api/v3/workspaces/' + urlParameters.wsidcontext + '/items/' + urlParameters.dmsidcontext;
@@ -104,7 +109,7 @@ $(document).ready(function() {
                 openItem();
             }
 
-        }
+        } else setLandingPage();
 
     });
     
@@ -163,7 +168,13 @@ function setUIElements() {
     } 
 
 }
-function setLandingPage(userName) {
+function setLandingPage() {
+
+    $('#landing').show();
+
+    if(!$('body').hasClass('home-pending')) return;
+
+    $('body').removeClass('home-pending');
 
     if(applicationFeatures.homeButton || isBlank(urlParameters.dmsId)) {
 
@@ -195,7 +206,7 @@ function setLandingPage(userName) {
                 field       : config.assetServices.fieldIDs.assignee,
                 type        : 0,
                 comparator  : 5,
-                value       : userName          
+                value       : user.displayName          
             }];
 
             for(let status of config.assetServices.hideStates) {
@@ -283,7 +294,7 @@ function setLandingPage(userName) {
             field       : 'OWNER_USERID',
             type        : 3,
             comparator  : 15,
-            value       : userName
+            value       : user.displayName
         },{
             field       : 'WF_CURRENT_STATE',
             type        : 1,
@@ -337,7 +348,7 @@ function setLandingPage(userName) {
             field       : 'OWNER_USERID',
             type        : 3,
             comparator  : 15,
-            value       : userName
+            value       : user.displayName
         },{
             field       : 'WF_CURRENT_STATE',
             type        : 1,
@@ -347,29 +358,29 @@ function setLandingPage(userName) {
         
     } else $('#tab-your-problems').remove();
 
-    if(!isBlank(dmsId)) {
+    
+    // if(!isBlank(dmsId)) {
         
-        $('body').addClass('screen-main').removeClass('screen-landing').removeClass('screen-request');
+    //     $('body').addClass('screen-main').removeClass('screen-landing').removeClass('screen-request');
 
-        let params       = document.location.href.split('?')[1].split('&');
-        let wsidcontext  = null;
-        let dmsidcontext = null;
+    //     let params       = document.location.href.split('?')[1].split('&');
+    //     let wsidcontext  = null;
+    //     let dmsidcontext = null;
 
-        for(let param of params) {
-                    if(param.toLowerCase().indexOf('wsidcontext=' ) === 0) { wsidcontext  = param.split('=')[1]; }
-            else if(param.toLowerCase().indexOf('dmsidcontext=') === 0) { dmsidcontext = param.split('=')[1]; }
-        }
+    //     for(let param of params) {
+    //                 if(param.toLowerCase().indexOf('wsidcontext=' ) === 0) { wsidcontext  = param.split('=')[1]; }
+    //         else if(param.toLowerCase().indexOf('dmsidcontext=') === 0) { dmsidcontext = param.split('=')[1]; }
+    //     }
 
-        if(!isBlank(wsidcontext)) {
-            if(!isBlank(dmsidcontext)) {
-                links.context = '/api/v3/workspaces/' + wsidcontext + '/items/' + dmsidcontext;
-            }
-        }
+    //     if(!isBlank(wsidcontext)) {
+    //         if(!isBlank(dmsidcontext)) {
+    //             links.context = '/api/v3/workspaces/' + wsidcontext + '/items/' + dmsidcontext;
+    //         }
+    //     }
 
-        openItem();
+    //     openItem();
 
-    } else $('#landing').show();
-
+    // } else $('#landing').show();
 
 }
 function setUIEvents() {
@@ -384,6 +395,7 @@ function setUIEvents() {
             let url = '/service?theme=' + theme;
             if(!isBlank(urlParameters.type)) url += '&type=' + urlParameters.type;
             window.history.replaceState(null, null, url);
+            setLandingPage();
         });
     }
 
@@ -695,7 +707,7 @@ function openItem() {
         hideDetails         : false, 
         quantity            : true,
         counters            : true,
-        getFlatBOM          : true, 
+        getFlatBOM          : false, 
         search              : true,
         showRestricted      : false,
         toggles             : true,
