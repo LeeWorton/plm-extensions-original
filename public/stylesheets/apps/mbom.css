@@ -107,8 +107,9 @@ body.mode-operations #my-custom-toolbar-views { display : none !important; }
 
 body.details-on #tabs    { right : var(--width-details); }
 body.details-on #details { right : 0px; }
-body.details-on.no-viewer #tabs         { right : calc(50% + (var(--width-details) / 2) + (2 * var(--padding-panel)) ); }
-body.details-on.no-viewer #mbom         { width : calc(50% - (3 * var(--padding-panel)) - 2px - (var(--width-details) / 2)); }
+
+body.details-on.no-viewer #mbom         { width : calc(50% - (2 * var(--padding-panel)) - 2px - (var(--width-details) / 2)); }
+body.details-on.no-viewer #tabs         { left : calc(50% + (2 * var(--border-h) - (2 * var(--padding-panel)) - 2px - (var(--width-details) / 2))) }
 
 
 
@@ -486,6 +487,13 @@ body.details-on.no-viewer #mbom         { width : calc(50% - (3 * var(--padding-
     border-color  : var(--color-surface-level-4);
     height        : 28px;
     padding       : 0px 16px;
+}
+#mbom-add-button {
+    border         : none;
+    height         : 28px;
+    min-width      : unset;
+    padding-top    : 0px;
+    padding-bottom : 0px;
 }
 select.button.view-selector { height : 36px; }
 

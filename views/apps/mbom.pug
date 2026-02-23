@@ -41,6 +41,7 @@ block body
                     input#mbom-add-name(placeholder="Title")
                     input#mbom-add-code(placeholder="Code" )
                     input#mbom-add-qty( placeholder="Qty"  )
+                    #mbom-add-button.button.default Insert
 
             #tabs.surface-level-1 
 
@@ -67,8 +68,8 @@ block body
                     #ebom-actions
                         #add-all.button(title='Click all Add buttons in EBOM to add all missing items at once to the MBOM') Add All
                         #deselect-all.button(title='Reset item selection in viewer, EBOM and MBOM') Deselect All
-                        #toggle-colors.button.with-toggle.toggle-off(title='When enabled, the component colors in the viewer will be replaced by red, yellow and green to indicate their consumption in the MBOM') Apply Colors
-                        #toggle-viewer.button.with-toggle.toggle-off(title='Hide / show the 3D viewer') Hide Viewer
+                        .button.with-toggle.toggle-on#toggle-viewer(title='Hide / show the 3D viewer') Viewer
+                        .button.with-toggle.toggle-off#toggle-colors(title='When enabled, the component colors in the viewer will be replaced by red, yellow and green to indicate their consumption in the MBOM') Apply Colors
 
                 .panel-content.tab-group-main#add
                     .panel-left

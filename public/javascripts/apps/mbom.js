@@ -240,7 +240,7 @@ function setUIEvents() {
         viewerResetSelection(true);
     });
     $('#toggle-viewer').click(function() {
-        $('#toggle-viewer').toggleClass('toggle-on').toggleClass('toggle-off');
+        $(this).toggleClass('toggle-on').toggleClass('toggle-off');
         $('body').toggleClass('no-viewer')
     });
     $('#toggle-colors').click(function() {
@@ -294,7 +294,12 @@ function setUIEvents() {
 
 
     // Controls to add new process in BOM
-    $('#mbom-add-process > input').keypress(function (e) { insertNewProcess(e); });
+    $('#mbom-add-process > input').keypress(function (e) { 
+        if (e.which == 13) {
+            insertNewProcess();
+        }
+     });
+    $('#mbom-add-button').click(function (e) { insertNewProcess(); });
 
 
     // Set End Item dialog
@@ -3145,42 +3150,39 @@ function updateMBOMNumbers() {
 
 
 // Input controls to add new items to MBOM
-function insertNewProcess(e) {
+function insertNewProcess() {
     
-    if (e.which == 13) {
+    if($('#mbom-add-name').val() === '') return;
 
-        if($('#mbom-add-name').val() === '') return;
-
-        let node = {
-            level       : 1,
-            bomType     : 'mbom',
-            title       : $('#mbom-add-name').val(),
-            hasChildren : true,
-            isEBOMItem  : false,
-            isProcess   : true,
-            isLeaf      : false,
-            icon        : 'radio-process',
-            code        : $('#mbom-add-code').val(),
-            revision    : '-',
-            quantity    : $('#mbom-add-qty' ).val() || 1
-        }
-
-        let elemNew = insertBOMPartListNode('mbom', null, node);
-        
-        let elemBOM = $('#mbom-tree').children().first().children('.item-bom').first();
-
-        if(disassembleMode) elemBOM.prepend(elemNew);
-        else elemBOM.append(elemNew);
-
-        updateMBOMNumbers();
-        selectProcess(elemNew);
-        
-        $('#mbom-add-name').val('');
-        $('#mbom-add-code').val('');
-        $('#mbom-add-qty' ).val('');
-        $('#mbom-add-name').focus();
-        
+    let node = {
+        level       : 1,
+        bomType     : 'mbom',
+        title       : $('#mbom-add-name').val(),
+        hasChildren : true,
+        isEBOMItem  : false,
+        isProcess   : true,
+        isLeaf      : false,
+        icon        : 'radio-process',
+        code        : $('#mbom-add-code').val(),
+        revision    : '-',
+        quantity    : $('#mbom-add-qty' ).val() || 1
     }
+
+    let elemNew = insertBOMPartListNode('mbom', null, node);
+    
+    let elemBOM = $('#mbom-tree').children().first().children('.item-bom').first();
+
+    if(disassembleMode) elemBOM.prepend(elemNew);
+    else elemBOM.append(elemNew);
+
+    updateMBOMNumbers();
+    selectProcess(elemNew);
+    
+    $('#mbom-add-name').val('');
+    $('#mbom-add-code').val('');
+    $('#mbom-add-qty' ).val('');
+    $('#mbom-add-name').focus();
+        
     
 }
 
