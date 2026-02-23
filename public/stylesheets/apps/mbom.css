@@ -323,6 +323,7 @@ body.details-on.no-viewer #tabs         { left : calc(50% + (2 * var(--border-h)
 }
 .item.selected > .item-head > select {
     border-color : var(--color-selected-border);
+    border-left  : none;
 }
 .item.selected > .item-head > .item-number {
     color : var(--color-font);
