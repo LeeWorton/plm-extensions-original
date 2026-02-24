@@ -3144,7 +3144,7 @@ select.button.main:hover {
 }
 #startup-error .icon {
     color       : var(--color-blue-500);
-    font-weight : 300;
+    font-weight : 400;
     font-size   : 42px;
 }
 #startup-error .title {
@@ -3152,7 +3152,7 @@ select.button.main:hover {
     font-weight : 800;
 }
 #startup-error strong {
-    color : var(--color-yellow-500);
+    color : var(--color-blue-500);
 }
 #startup-error .actions {
     display         : flex;
