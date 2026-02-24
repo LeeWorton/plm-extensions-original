@@ -24,15 +24,16 @@ exports.common = {
     workspaceIds : {
 
         // Product Development Workspaces
-        changeOrders           : 84,
-        changeRequests         : 83,
-        changeTasks            : 80,
-        designReviews          : 76,
-        designReviewTasks      : 77,
-        engineeringProjects    : 213,
-        items                  : 57,
-        nonConformances        : 98,
-        problemReports         : 82,
+        changeOrders                 : 84,
+        changeRequests               : 83,
+        changeTasks                  : 80,
+        designReviews                : 76,
+        designReviewTasks            : 77,
+        engineeringProjects          : 213,
+        engineeringProjectActivities : 211,
+        items                        : 57,
+        nonConformances              : 98,
+        problemReports               : 82,
 
         // Products & Projects Workspaces
         products               : 95,
