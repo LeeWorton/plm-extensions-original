@@ -168,6 +168,8 @@ function openEditor(link) {
 
     Promise.all(requests).then(function(responses) {
 
+        printResponsesErrorMessagesToConsole(responses);
+
         urlParameters.title = responses[0].data.title;
 
         $('body').addClass('screen-main').removeClass('screen-landing');
@@ -176,32 +178,44 @@ function openEditor(link) {
 
         links.ebom = getSectionFieldValue(responses[0].data.sections, config.assets.fieldIdBOM, '', 'link');
 
-        insertDetails(links.ebom, paramsDetails);
+        if(isBlank(links.ebom)) {
 
-        insertBOM(links.ebom, {
-            search              : true,
-            path                : true,
-            counters            : true,
-            openInPLM           : true,
-            collapseContents    : true,
-            toggles             : true,
-            viewerSelection     : false,
-            includeBOMPartList  : true,
-            bomViewName         : config.bomViewName,
-            fieldsIn            : ['Quantity', 'Qty'],
-            contentSize         : 'm',
-            afterCompletion     : function(id, data) { afterBOMCompletion(id, data) },
-            onClickItem         : function(elemClicked) { onSelectBOMItem(elemClicked); }
-        });
+            showStartupError({
+                title        : 'Missing Data',
+                details      : 'This editor requires an Engineering BOM with viewable file, but such data could not be found in context of<br><strong>' + responses[0].data.title + '</strong>',
+                instructions : 'Select an Engineering BOM in field <strong>' + config.assets.fieldIdBOM + '</strong> or update your server configuration to use another field referencing the right Engineering BOM'
+            });
 
-        insertViewer(links.ebom, { cacheInstances : true });
+        } else {
 
-        for(let index = 1; index < responses.length; index++) {
+            insertDetails(links.ebom, paramsDetails);
 
-            let workspace         = workspaces[index-1];
-                workspace.columns = responses[index].data.fields;
-                workspace.link    = getSectionFieldValue(responses[0].data.sections, workspace.fieldId, '', 'link');
-                workspace.index   = index - 1;
+            insertBOM(links.ebom, {
+                search              : true,
+                path                : true,
+                counters            : true,
+                openInPLM           : true,
+                collapseContents    : true,
+                toggles             : true,
+                viewerSelection     : false,
+                includeBOMPartList  : true,
+                bomViewName         : config.bomViewName,
+                fieldsIn            : ['Quantity', 'Qty'],
+                contentSize         : 'm',
+                afterCompletion     : function(id, data) { afterBOMCompletion(id, data) },
+                onClickItem         : function(elemClicked) { onSelectBOMItem(elemClicked); }
+            });
+
+            insertViewer(links.ebom, { cacheInstances : true });
+
+            for(let index = 1; index < responses.length; index++) {
+
+                let workspace         = workspaces[index-1];
+                    workspace.columns = responses[index].data.fields;
+                    workspace.link    = getSectionFieldValue(responses[0].data.sections, workspace.fieldId, '', 'link');
+                    workspace.index   = index - 1;
+
+            }
 
         }
 
