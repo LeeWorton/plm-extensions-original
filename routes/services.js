@@ -295,14 +295,28 @@ router.get('/chrome-installer', function(req, res, next) {
     if(fs.existsSync(path)) {
         fs.readdir(path, function (err, files) {
             files.forEach(function (file) {
-                if(!fs.lstatSync(path + '/' + file).isDirectory()) {
+                let filePath = path + '/' + file;
+                if(!fs.lstatSync(filePath).isDirectory()) {
                     if(file.indexOf('.') > 0) {
-                        let data = fs.readFileSync(path + '/' + file, 'utf8');
-                        data = data.replaceAll('http://localhost:8080', baseURL);
+
+                        let suffix   = file.split('.')[1];
+                        let encoding = (suffix == 'png') ? 'base64' : 'utf8';
+                        let data     = '';
+
+                        if(encoding === 'utf8') {
+                            data = fs.readFileSync(path + '/' + file, 'utf8');
+                            data = data.replaceAll('http://localhost:8080', baseURL);
+                        } else {
+                            data = fs.readFileSync(path + '/' + file);
+                            data = data.toString("base64");
+                        }
+
                         response.files.push({
-                            name : file,
-                            data : data
+                            name     : file,
+                            data     : data,
+                            encoding : encoding
                         });
+
                     }
                 }
             });

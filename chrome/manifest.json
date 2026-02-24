@@ -3,6 +3,11 @@
     "name": "PLM UX Extensions",
     "version": "1.0",
     "description": "Adds PLM UX Extensions commands to the Fusion Manage standard user interface",
+    "icons" : {
+         "16" : "icon-16.png",
+         "48" : "icon-48.png",
+        "128" : "icon-128.png"
+    },
     "permissions": [
         "activeTab",
         "storage",

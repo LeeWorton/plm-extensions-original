@@ -220,7 +220,18 @@ async function saveChromeExtensionInstallerFiles(fileHandler, file) {
     let fileHandle = await dirHandler.getFileHandle(file.name, { create: true });
     let writable   = await fileHandle.createWritable();
 
-    await writable.write(file.data);
+    if(file.encoding === 'base64') {
+
+        const binary = atob(file.data);   
+        const len    = binary.length;
+        const bytes  = new Uint8Array(len);
+  
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+        await writable.write(bytes);
+
+    } else await writable.write(file.data);
+
     await writable.close();
 
 }
