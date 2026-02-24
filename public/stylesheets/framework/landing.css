@@ -121,10 +121,27 @@ body.layout-tiles-list .tile.min .tile-access .button {
     margin-bottom   : 12px;
     padding         : 18px; 
 }
+#side p {
+    margin : 20px 0px;
+}
 .side-toolbar {
     display         : flex;
     flex-direction  : column;
     gap             : 6px;
+}
+#side-toolbar {
+    display : grid;
+    gap     : 4px;
+    grid-template-columns: 1fr 1fr;
+}
+#side-toolbar > div {
+    height      : 40px;
+    padding     : 6px 12px;
+    white-space : normal;
+}
+#side-toolbar > div > span {
+    display : block;
+    color   : var(--color-blue-500);
 }
 #themes {
     display         : flex;
@@ -438,20 +455,6 @@ a:hover {
 
 
 
-/*  TENANT */
-/* ----------------------------------------------------------------------------- */
-#tenant-name {
-    color       : var(--color-blue-500);
-}
-
-
-/*  CHROME EXTENSION */
-/* ----------------------------------------------------------------------------- */
-#chrome-extension {
-    color       : var(--color-blue-500);
-}
-
-
 /*  DOCS */
 /* ----------------------------------------------------------------------------- */
 #docs-name {
@@ -462,9 +465,6 @@ a:hover {
 
 /*  CHANGE LOG */
 /* ----------------------------------------------------------------------------- */
-#version-name {
-    color       : var(--color-blue-500);
-}
 #framework-changes { 
     background  : var(--color-surface-level-2);
     color       : var(--color-font);

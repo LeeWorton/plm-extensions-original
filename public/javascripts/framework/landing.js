@@ -23,6 +23,10 @@ $(document).ready(function() {
         window.open(base);
     }); 
 
+    $('#chrome-download').click(function() {
+        downloadChromeExtensionInstaller();
+    });
+
     $('#theme-selector').change(function() {
 
         $('body').removeClass('dark-theme');
@@ -198,6 +202,30 @@ $(document).ready(function() {
     
 });
 
+
+function downloadChromeExtensionInstaller() {
+
+    window.showDirectoryPicker().then((fileHandler) => {
+        $.get('/services/chrome-installer', {}, function(response) {
+            for(let file of response.files) saveChromeExtensionInstallerFiles(fileHandler, file);
+        });
+    }).catch((error) => {
+        if (error.name !== "AbortError") console.error("Unexpected error:", error);
+    });
+
+}
+async function saveChromeExtensionInstallerFiles(fileHandler, file) {
+
+    let dirHandler = await createDirectory(fileHandler, '');
+    let fileHandle = await dirHandler.getFileHandle(file.name, { create: true });
+    let writable   = await fileHandle.createWritable();
+
+    await writable.write(file.data);
+    await writable.close();
+
+}
+
+
 function updateLinks() {
 
     let location = document.location.href.split('?');
@@ -234,13 +262,11 @@ function updateLinks() {
 
 }
 
+
 function openSelectedApp() {
     
     let params = new URLSearchParams(window.location.search);
- 
     let app    = params.get('app');
-
-    console.log('App to open:', app);
 
     if(app) {
         $('.tile').each(function() {

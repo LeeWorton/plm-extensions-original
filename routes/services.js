@@ -263,8 +263,7 @@ router.get('/storage/contents', function(req, res, next) {
 });
 
 
-
-// Get list of files and folders in defined foleder within /storage
+// Get Chrome Extensions configuration settings
 router.get('/chrome', function(req, res, next) {
 
     console.log(' ');
@@ -275,6 +274,45 @@ router.get('/chrome', function(req, res, next) {
     console.log();
 
     res.json(req.app.locals.chrome);
+    
+});
+
+
+// Download Chrome Extensions installation files
+router.get('/chrome-installer', function(req, res, next) {
+
+    let path = 'chrome';
+
+    let response = {
+        path  : path,
+        files : [],
+        url   : '/services/chrome-installer'
+    };    
+
+    let redirectUri = req.app.locals.redirectUri;
+    let baseURL     = redirectUri.split('/callback')[0];
+
+    if(fs.existsSync(path)) {
+        fs.readdir(path, function (err, files) {
+            files.forEach(function (file) {
+                if(!fs.lstatSync(path + '/' + file).isDirectory()) {
+                    if(file.indexOf('.') > 0) {
+                        let data = fs.readFileSync(path + '/' + file, 'utf8');
+                        data = data.replaceAll('http://localhost:8080', baseURL);
+                        response.files.push({
+                            name : file,
+                            data : data
+                        });
+                    }
+                }
+            });
+            res.json(response);
+        });
+    } else { 
+        response.error   = true;
+        response.message = 'Folder does not exist';
+        res.json(response); 
+    }
     
 });
 
