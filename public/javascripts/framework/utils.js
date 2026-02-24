@@ -219,6 +219,45 @@ function hideStartupDialog() {
 }
 
 
+// Startup Error Message
+function showStartupError(params) {
+
+    if(isBlank(params)) params = {};
+
+    let icon         = params.icon         || 'icon-info';
+    let title        = params.title        || 'Missing Data';
+    let details      = params.details      || '';
+    let instructions = params.instructions || '';
+
+    $('body').children().addClass('hidden');
+
+    let elemParent = $('<div></div>').appendTo('body')
+        .attr('id', 'startup-error')
+        .addClass('pos-abs-max')
+        .addClass(getSurfaceLevel($('body')));
+
+    let elemWrapper = $('<div></div>').appendTo(elemParent).addClass('wrapper');
+
+    let elemHeader = $('<div></div>').appendTo(elemWrapper).addClass('header');
+    $('<div></div>').appendTo(elemHeader).addClass('icon').addClass(icon);
+    $('<div></div>').appendTo(elemHeader).addClass('title').html(title);
+    
+    $('<div></div>').appendTo(elemWrapper).addClass('details').html(details);
+    $('<div></div>').appendTo(elemWrapper).addClass('instructions').html(instructions);
+    
+    let elemActions = $('<div></div>').appendTo(elemWrapper).addClass('actions')
+
+    $('<div></div>').appendTo(elemActions)
+        .addClass('button')
+        .addClass('default')
+        .html('Reload')
+        .click(function() {
+            document.location.href = document.location.href;
+        })
+
+}
+
+
 // Insert Main Menu to switch utilities
 function insertMenu() {
 

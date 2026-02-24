@@ -3115,6 +3115,56 @@ select.button.main:hover {
 
 
 
+/*  STARTUP ERROR */
+/* ----------------------------------------------------------------------------- */
+#startup-error {
+    display         : flex;
+    flex-direction  : column;
+    justify-content : center;
+    z-index         : 10;
+}
+#startup-error .wrapper {
+    display : flex;
+    gap     : 12px;
+    height  : unset;
+    margin  : auto;
+    padding : 48px;
+    width   : 400px;
+    flex-direction : column;
+}
+#startup-error.surface-level-1 .wrapper { background : var(--color-surface-level-3); }
+#startup-error.surface-level-2 .wrapper { background : var(--color-surface-level-4); }
+#startup-error.surface-level-3 .wrapper { background : var(--color-surface-level-5); }
+#startup-error .header {
+    display : flex;
+    gap     : 14px;
+}
+#startup-error .header > div {
+    line-height : 48px;
+}
+#startup-error .icon {
+    color       : var(--color-blue-500);
+    font-weight : 300;
+    font-size   : 42px;
+}
+#startup-error .title {
+    font-size   : 24px;
+    font-weight : 800;
+}
+#startup-error strong {
+    color : var(--color-yellow-500);
+}
+#startup-error .actions {
+    display         : flex;
+    justify-content : end;
+    padding-top     : 12px;
+}
+#startup-error .button {
+    display : inline-block;
+}
+
+
+
 /*  TIMEOUT ERROR */
 /* ----------------------------------------------------------------------------- */
 #timeout {
