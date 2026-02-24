@@ -4694,6 +4694,10 @@ function getFilterComparator(filter) {
         case 'does-not-equal':
             if(filter.type === '1') result = '5';
             break;
+            
+        case 'status-is':
+            result = '15';
+            break;
 
         case 'after': 
             result = '18'; 
