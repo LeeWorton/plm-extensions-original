@@ -82,58 +82,100 @@
                 th Field Label
                 th Field ID
                 th Source
+                th Type
+                th Details
+                th Editable
             tr 
                 td Descriptor
                 td 
                 td System Fields
+                td
+                td Standard Field
+                td -
             tr 
                 td Quatity
                 td 
                 td BOM Fields
+                td 
+                td Standard Field
+                td True
             tr 
                 td ID
                 td ID
                 td Item Details Fields / Header
+                td Single Line Text 
+                td Length : 20
+                td Creation Only
             tr 
                 td Asset
                 td ASSET
                 td Item Details Fields / Header
+                td Single Picklist 
+                td Referencing Workspace Assets
+                td Creation Only
             tr 
                 td Item Number
                 td ITEM_NUMBER
                 td Item Details Fields / Header
+                td Single Line Text 
+                td Length : 100
+                td Creation Only
             tr 
                 td Reference Item
                 td REFERENCE_ITEM
                 td Item Details Fields / Header
+                td Picklist
+                td Referencing Workspace Items
+                td True
             tr 
                 td REFERENCE_ITEM_ROOT
                 td REFERENCE_ITEM_ROOT
                 td Item Details Fields / Header
+                td Single Line Text 
+                td Length : 1000 (required for EBOM matching)
+                td True                
             tr 
                 td REFERENCE_ITEM_PATH
                 td REFERENCE_ITEM_PATH
                 td Item Details Fields / Header
+                td Single Line Text 
+                td Length : 1000 (required for EBOM matching)
+                td True                
             tr 
                 td Serial #
                 td SERIAL
                 td Item Details Fields / Details
+                td Check Box 
+                td
+                td True
             tr 
                 td END_ITEM
                 td END_ITEM
                 td Item Details Fields / Details
+                td Check Box 
+                td
+                td True                
             tr 
                 td Spare Part
                 td SPARE_PART
                 td Item Details Fields / Details
+                td Check Box 
+                td
+                td True                
             tr 
                 td Purchased
                 td PURCHASED
                 td Item Details Fields / Details
+                td Check Box 
+                td
+                td True                
             tr 
                 td Supplier
                 td SUPPLIER
                 td Item Details Fields / Details
+                td Single Line Text
+                td Length : 100
+                td True                
         h1 Setup Step #2 : Adjust workspace Assets
         p The workspace 
             strong Assets 
