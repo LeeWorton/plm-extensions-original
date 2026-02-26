@@ -4362,7 +4362,7 @@ function genTilesList(id, items, panelSettings) {
                 let elemGroup = $('<div></div>').appendTo(elemContent)
                     .addClass('tiles-group');
 
-                $('<div></div>').appendTo(elemGroup)
+                let elemGroupTitle = $('<div></div>').appendTo(elemGroup)
                     .addClass('tiles-group-title')
                     .html(isBlank(item.group) ? 'n/a' : item.group);
 
