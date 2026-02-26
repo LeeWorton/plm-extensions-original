@@ -8426,6 +8426,140 @@ function insertWorkflowHistoryDataDone(id, history, item) {}
 
 
 
+// Insert Workflow Action Dialog
+function insertWorkflowTransitionDialog(link, descriptor, type, transition, callback) {
+
+    appendOverlay(false);
+
+    if(isBlank(type)) type = 'Item';
+
+    let elemDialog        = $('#dialog-workflow-action');
+    let elemDialogContent = $('#dialog-workflow-action-content');
+
+    console.log(transition);
+
+    if(elemDialog.length === 0) {
+
+        elemDialog = $('<div></div>').appendTo($('body'))
+            .addClass('dialog')
+            .attr('id', 'dialog-workflow-action');
+
+        $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-header')
+            .html('Perform Workflow Action');
+
+        elemDialogContent = $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-content')
+            .attr('id', 'dialog-workflow-action-content');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('label')
+            .html('Workflow Action');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('value')
+            .attr('id', 'dialog-workflow-action-name');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('label')
+            .html(type);       
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('value')
+            .attr('id', 'dialog-workflow-action-item');              
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('label')
+            .html('Current Status');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('value')
+            .attr('id', 'dialog-workflow-current-status');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('label')
+            .html('New Status');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('value')
+            .attr('id', 'dialog-workflow-next-status');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('message')
+            .attr('id', 'dialog-workflow-action-comment-required')
+            .html('A comment is required for this action, please provide it below:');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('message')
+            .attr('id', 'dialog-workflow-action-comment-optional')
+            .html('A comment may optionally be provided');
+
+        $('<textarea></textarea>').appendTo(elemDialogContent)
+            .attr('id', 'dialog-workflow-action-comment')
+            .attr('placeholder', 'Enter workflow action comment');
+
+        $('<div></div>').appendTo(elemDialogContent)
+            .addClass('message')
+            .attr('id', 'dialog-workflow-action-notify-owner')
+            .html('The ' + type + ' owner(s) will be notified about this status update by mail automatically');            
+
+        let elemDialogFooter = $('<div></div>').appendTo(elemDialog)
+            .addClass('dialog-footer');
+
+        $('<div></div>').appendTo(elemDialogFooter)
+            .addClass('button')
+            .addClass('default')
+            .html('Confirm')
+            .click(function() {
+                $('#dialog-workflow-action').hide();
+                $.post('/plm/transition', {
+                    link       : link,
+                    transition : transition.__self__, 
+                    comment    : $('#dialog-workflow-action-comment').val()
+                }, function() {
+                    $('#overlay').hide();
+                    callback();
+                });
+            })
+
+        $('<div></div>').appendTo(elemDialogFooter)
+            .addClass('button')
+            .html('Cancel')
+            .click(function() {
+                $('#dialog-workflow-action').hide();
+                $('#overlay').hide();
+            })
+
+    }
+
+    elemDialog.show()
+        .removeClass('no-comment')
+        .removeClass('optional-comment')
+        .removeClass('required-comment')
+        .removeClass('no-owner-notification');
+
+    $('#dialog-workflow-action-name').html(transition.name);
+    $('#dialog-workflow-action-item').html(descriptor);
+    $('#dialog-workflow-current-status').html(transition.fromState.title);
+    $('#dialog-workflow-next-status').html(transition.toState.title);
+    $('#dialog-workflow-action-comment').val('');
+
+    if(transition.comments == 'OPTIONAL') {
+        elemDialog.addClass('optional-comment');
+        $('#dialog-workflow-action-comment').focus();
+    } else if(transition.comments == 'REQUIRED') {
+        elemDialog.addClass('required-comment');
+        $('#dialog-workflow-action-comment').focus();
+    } else elemDialog.addClass('no-comment');
+
+    if(!transition.sendEmail) {
+        elemDialog.addClass('no-owner-notification');
+    }
+
+}
+
+
+
 // Insert Change Log
 function insertChangeLog(link, params) {
 
