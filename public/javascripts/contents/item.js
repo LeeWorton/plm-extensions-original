@@ -255,7 +255,7 @@ function clickWorkflowAction(elemClicked, params) {
     let link       = elemClicked.attr('data-link');
     let transition = elemClicked.val();
 
-    $.get('/plm/transition', { link : link, transition : transition }, function(response) {
+    $.post('/plm/transition', { link : link, transition : transition }, function(response) {
         if(response.error) showErrorMessage('Workflow Action Failed', response.data.message);
         $('#overlay').hide();
         clickWorkflowActionDone(response.params.link, response.params.tranistion, response);
@@ -734,7 +734,7 @@ function submitCreate(wsIdNew, sections, elemParent, settings, callback) {
 
                     if(isBlank(settings.transition)) callback(result);
                     else {
-                        $.get('/plm/transition', { link : result.link, transition : settings.transition}, function() {
+                        $.post('/plm/transition', { link : result.link, transition : settings.transition}, function() {
                             callback(result);
                         });
                     }

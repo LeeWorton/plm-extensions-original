@@ -652,7 +652,7 @@ function transitionDesignReview() {
         transition : $('#review-finish').attr('data-link'),
         comment    : 'Closed by Design Review Portal'
     }
-    $.get('/plm/transition', params, function(response) {
+    $.post('/plm/transition', params, function(response) {
         if(response.error) showErrorMessage('Error while finishing review', response.data.message);
         closeReview();
         $('#overlay').hide();

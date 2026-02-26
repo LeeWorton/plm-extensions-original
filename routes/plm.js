@@ -1747,7 +1747,6 @@ function genPayloadGridFields(req) {
 }
 
 
-
 /* ----- UPDATE GRID ROW ----- */
 router.post('/update-grid-row', function(req, res, next) {
     
@@ -4217,27 +4216,27 @@ router.get('/transitions', function(req, res, next) {
 
 
 /* ----- PERFORM WORKFLOW TRANSITION ----- */
-router.get('/transition', function(req, res, next) {
+router.post('/transition', function(req, res, next) {
     
     console.log(' ');
     console.log('  /transition');
     console.log(' --------------------------------------------');  
-    console.log('  req.query.wsId       = ' + req.query.wsId);
-    console.log('  req.query.dmsId      = ' + req.query.dmsId);
-    console.log('  req.query.link       = ' + req.query.link);
-    console.log('  req.query.transition = ' + req.query.transition);
-    console.log('  req.query.comment    = ' + req.query.comment);
+    console.log('  req.body.wsId       = ' + req.body.wsId);
+    console.log('  req.body.dmsId      = ' + req.body.dmsId);
+    console.log('  req.body.link       = ' + req.body.link);
+    console.log('  req.body.transition = ' + req.body.transition);
+    console.log('  req.body.comment    = ' + req.body.comment);
     console.log();
 
     let url = req.app.locals.tenantLink ;
-        url += (typeof req.query.link !== 'undefined') ? req.query.link : '/api/v3/workspaces/' + req.query.wsId + '/items/' + req.query.dmsId;
+        url += (typeof req.body.link !== 'undefined') ? req.body.link : '/api/v3/workspaces/' + req.body.wsId + '/items/' + req.body.dmsId;
         url += '/workflows/1/transitions';
 
     let custHeaders = getCustomHeaders(req);
-        custHeaders['content-location'] = req.query.transition;
+        custHeaders['content-location'] = req.body.transition;
 
     axios.post(url, {
-        comment : req.query.comment
+        comment : req.body.comment
     },{
         headers : custHeaders
     }).then(function(response) {

@@ -1493,7 +1493,7 @@ function genRequests(limit) {
                 params.transition = $('#select-perform-transition').val();
                 let elemComment = $('#input-perform-transition');
                 if(!elemComment.hasClass('hidden')) params.comment = elemComment.val();
-                requests.push($.get('/plm/transition', params));
+                requests.push($.post('/plm/transition', params));
             } else if(run.actionId === 'perform-lifecycle-transition') {
 
                 params.transition = $('#select-perform-lifecycle-transition').val();
