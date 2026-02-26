@@ -1308,20 +1308,34 @@ function insertDetailsFields(id, sections, fields, data, settings, bookmarks, re
 
         field.id       = field.urn.split('.').pop();
         field.visible  = false;
+        field.hasValue = false;
+        field.setValue = null;
         field.required = isFieldRequired(field);
 
-        if(!settings.requiredFieldsOnly || field.required) {
-            if(fieldsIn.length === 0 || fieldsIn.includes(field.id)) {
-                if(fieldsEx.length === 0 || !fieldsEx.includes(field.id)) {
-                    for(let section of allVisibleSectionsFields) {
-                        if(section.fields.includes(field.id)) {
-                            field.visible = true;
-                            break;
+        if(field.visibility !== 'NEVER') {
+            if(!settings.requiredFieldsOnly || field.required) {
+                if(fieldsIn.length === 0 || fieldsIn.includes(field.id)) {
+                    if(fieldsEx.length === 0 || !fieldsEx.includes(field.id)) {
+                        for(let section of allVisibleSectionsFields) {
+                            if(section.fields.includes(field.id)) {
+                                field.visible = true;
+                                break;
+                            }
                         }
                     }
                 }
             }
         }
+
+        for(let fieldValue of fieldValues) {
+            if(fieldValue.fieldId === field.id) {
+                field.hasValue = true;
+                field.setValue = fieldValue.value;
+                continue;
+            }
+        }
+
+                                        
 
     }
 
@@ -1520,9 +1534,9 @@ function insertDetailsFields(id, sections, fields, data, settings, bookmarks, re
                                 if(wsField.urn === sectionField.urn) {
                                     if(fieldValue.fieldId === fieldId) {
                                        
-                                        wsField.visible = true;
+                                        wsField.hasValue = true;
                                         let elemField = insertDetailsField(wsField, data, elemFields, settings, sectionLock, bookmarks, recents, picklistsData);
-                                        // elemField.addClass('hidden');
+                                        elemField.addClass('hidden');
                                         // insertHiddenDetailsField(wsField, elemFields, fieldValue);
                                     }
                                 }
@@ -1713,8 +1727,6 @@ function getAllVisibleSectionsFieldIDs(sections) {
 }
 function insertDetailsField(field, data, elemFields, settings, sectionLock, bookmarks, recents, picklistsData) {
 
-    if(!field.visible) return;
-
     if(isBlank(sectionLock)) sectionLock = false;
     if(isBlank(bookmarks  )) bookmarks   = false;
     if(isBlank(recents    )) recents     = false;
@@ -1736,15 +1748,19 @@ function insertDetailsField(field, data, elemFields, settings, sectionLock, book
     let hideComputed    = (isBlank(settings.hideComputed)) ? false : settings.hideComputed;
     let hideReadOnly    = (isBlank(settings.hideReadOnly)) ? false : settings.hideReadOnly;
     let hideLabels      = (isBlank(settings.hideLabels  )) ? false : settings.hideLabels;
-    let suppressLinks   = (isBlank(settings.suppressLink)) ? false : settings.suppressLinks;
+    // let suppressLinks   = (isBlank(settings.suppressLink)) ? false : settings.suppressLinks;
     let editable        = (isBlank(settings.editable    )) ? false : settings.editable;
 
-    if(field.visibility === 'NEVER') return;
-    if((field.editability === 'NEVER') && hideReadOnly) return;
-    if(field.formulaField  && hideComputed) return;
+    if(!field.hasValue) {
+        if(!field.visible) return;
+        if(field.visibility === 'NEVER') return;
+        if((field.editability === 'NEVER') && hideReadOnly) return;
+        if(field.formulaField  && hideComputed) return;
+    }
 
-    let value    = null;
-    let urn      = field.urn.split('.');
+
+    // let value    = null;
+    // let urn      = field.urn.split('.');
     // let fieldId  = urn[urn.length - 1];
     let readonly = (!settings.editable || field.editability === 'NEVER' || (field.editability !== 'ALWAYS' && (typeof data === 'undefined')) || field.formulaField);
     // let required = isFieldRequired(field, fieldId, settings);
@@ -1770,7 +1786,7 @@ function insertDetailsField(field, data, elemFields, settings, sectionLock, book
                     let urn = itemField.urn.split('.');
                     let itemFieldId = urn[urn.length - 1];
                     if(field.id === itemFieldId) {
-                        value = itemField.value;
+                        // value = itemField.value;
                         break;
                     }
                 }
@@ -1778,11 +1794,11 @@ function insertDetailsField(field, data, elemFields, settings, sectionLock, book
         }
     }
 
-    if(isBlank(value)) {
-        if(field.hasOwnProperty('value')) value = field.value;
-    }
+    // if(isBlank(value)) {
+        // if(field.hasOwnProperty('value')) value = field.value;
+    // }
 
-    if(typeof value === 'undefined') value = null;
+    // if(typeof value === 'undefined') value = null;
 
     insertField(settings, elemValue, field, data, picklistsData, bookmarks, recents);
 
@@ -2100,16 +2116,16 @@ function insertDetailsField(field, data, elemFields, settings, sectionLock, book
 }
 function insertField(settings, elemParent, field, data, picklistsData, bookmarks, recents) {
 
-    if(field.visibility === 'NEVER') return null;
+    if(field.visibility === 'NEVER') elemParent.addClass('hidden');
 
     if(isBlank(field.id)) field.id = field.urn.split('.').pop();
 
-    let value     = getFieldValueFromResponseData(field.id, data) || '';
+    let value     = (field.hasValue) ? field.setValue : getFieldValueFromResponseData(field.id, data) || '';
     let editable  = (isBlank(settings.editable)) ? false : settings.editable;
     let elemInput = $('<input>').attr('data-id', field.id);
 
     settings.readonly = (field.editability === 'NEVER') || (field.formulaField) || (field.type.title === 'Image') || false;
-
+    
     if(settings.readonly) editable = false;
 
     setFieldDataAndClasses(elemParent, field, settings.editable);
@@ -2118,20 +2134,22 @@ function insertField(settings, elemParent, field, data, picklistsData, bookmarks
 
         if(value === null) value = '';
 
-        if(field.unitOfMeasure !== null) value += ' ' + field.unitOfMeasure;
+        let displayValue = value;
+
+        if(field.unitOfMeasure !== null) displayValue += ' ' + field.unitOfMeasure;
 
         switch(field.type.title) {
 
             case 'Auto Number':
-                elemParent.html(value);
+                elemParent.html(displayValue);
                 break;
             
             case 'Single Line Text':
                 if(field.formulaField) {
                     elemParent.addClass('field-computed');
                     elemParent.addClass('no-scrollbar');
-                    elemParent.html($('<div></div>').html(value).text());
-                } else elemParent.html(value);
+                    elemParent.html($('<div></div>').html(displayValue).text());
+                } else elemParent.html(displayValue);
                 break;
 
             case 'Date':
@@ -2142,14 +2160,16 @@ function insertField(settings, elemParent, field, data, picklistsData, bookmarks
                 break;
 
             case 'Integer':
-                elemParent.html(value);
+                elemParent.html(displayValue);
                 break;
 
             case 'Float':
             case 'Money':
                 value = (value !== '') ? parseFloat(value).toFixed(field.fieldPrecision) : '';
-                if(value !== '' ) { if(field.unitOfMeasure !== null) value += ' ' + field.unitOfMeasure; }
-                elemParent.html(value);
+                if(value === '' ) { 
+                    displayValue = '';
+                } else if(field.unitOfMeasure !== null) { displayValue = value + ' ' + field.unitOfMeasure; }
+                elemParent.html(displayValue);
                 break;
 
             case 'Paragraph':
