@@ -2118,7 +2118,9 @@ function insertField(settings, elemParent, field, data, picklistsData, bookmarks
 
         if(value === null) value = '';
 
-        if(field.unitOfMeasure !== null) value += ' ' + field.unitOfMeasure;
+        let displayValue = value;
+
+        if(field.unitOfMeasure !== null) displayValue = value + ' ' + field.unitOfMeasure;
 
         switch(field.type.title) {
 
@@ -2130,8 +2132,8 @@ function insertField(settings, elemParent, field, data, picklistsData, bookmarks
                 if(field.formulaField) {
                     elemParent.addClass('field-computed');
                     elemParent.addClass('no-scrollbar');
-                    elemParent.html($('<div></div>').html(value).text());
-                } else elemParent.html(value);
+                    elemParent.html($('<div></div>').html(displayValue).text());
+                } else elemParent.html(displayValue);
                 break;
 
             case 'Date':
@@ -2142,14 +2144,16 @@ function insertField(settings, elemParent, field, data, picklistsData, bookmarks
                 break;
 
             case 'Integer':
-                elemParent.html(value);
+                elemParent.html(displayValue);
                 break;
 
             case 'Float':
             case 'Money':
                 value = (value !== '') ? parseFloat(value).toFixed(field.fieldPrecision) : '';
-                if(value !== '' ) { if(field.unitOfMeasure !== null) value += ' ' + field.unitOfMeasure; }
-                elemParent.html(value);
+                if(value === '' ) { 
+                    displayValue = '';
+                } else if(field.unitOfMeasure !== null) { displayValue = value + ' ' + field.unitOfMeasure; }
+                elemParent.html(displayValue);
                 break;
 
             case 'Paragraph':
