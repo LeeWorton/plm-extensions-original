@@ -88,7 +88,7 @@ exports.applications = {
     classes        : {},
     configurator   : {},
     dashboard      : {},
-    explorer       : {},
+    explorer       : {   rollUpFields     : []},
     impactanalysis : {},
     insights       : {},
     instances      : {
